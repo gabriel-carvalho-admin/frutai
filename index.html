@@ -292,7 +292,8 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
             <div class="campo"><label for="sCat">Categoria</label><select id="sCat"></select></div>
           </div>
           <div class="campo" id="sCatNovaBox" hidden><label for="sCatNova">Nome da nova categoria</label><input id="sCatNova" maxlength="30" placeholder="Ex.: Sacolas, Gelo, Combustível" autocomplete="off"></div>
-          <div class="campo"><label for="sDesc" id="sDescRot">Fornecedor ou descrição</label><input id="sDesc" maxlength="80" placeholder="Ex.: Box 14, 20 cx de laranja" autocomplete="off"></div>
+          <div class="campo" id="sProdBox"><label for="sProd">Produto</label><input id="sProd" maxlength="60" list="sProdSug" placeholder="Ex.: Laranja, 20 caixas" autocomplete="off"><datalist id="sProdSug"></datalist></div>
+          <div class="campo"><label for="sDesc" id="sDescRot">Fornecedor ou observação</label><input id="sDesc" maxlength="80" placeholder="Ex.: Box 14" autocomplete="off"></div>
           <div class="campo"><label for="sForma">Pago com</label>
             <select id="sForma"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option><option value="debito">Cartão débito</option><option value="credito">Cartão crédito</option><option value="boleto">Boleto / a prazo</option></select></div>
           <div class="acoes"><button class="btn pri" type="submit" id="sSalvar">Salvar lançamento</button><button class="btn" type="button" id="sCancelar" hidden>Cancelar edição</button></div>
@@ -493,7 +494,7 @@ function emExemplo(){ return carregado && !temReal(); }
 function todos(){
   if(emExemplo()) return exemplo();
   var out=[];
-  for(var m in dados){ var it=dados[m]; for(var id in it){ var x=it[id]; if(x && typeof x.valor==="number" && typeof x.data==="string") out.push({id:id,tipo:x.tipo,data:x.data,valor:x.valor,forma:x.forma,categoria:x.categoria,descricao:x.descricao}); } }
+  for(var m in dados){ var it=dados[m]; for(var id in it){ var x=it[id]; if(x && typeof x.valor==="number" && typeof x.data==="string") out.push({id:id,tipo:x.tipo,data:x.data,valor:x.valor,forma:x.forma,categoria:x.categoria,descricao:x.descricao,produto:x.produto}); } }
   return out;
 }
 function entre(lista,a,b){ return lista.filter(function(x){ return x.data>=a && x.data<=b; }); }
@@ -721,7 +722,7 @@ function desenharResumo(lista){
   var ult=sel.slice().sort(function(a,b){ return a.data<b.data?1:a.data>b.data?-1:0; }).slice(0,8);
   $("ultimos").innerHTML = ult.length ? '<table><thead><tr><th>Dia</th><th>Tipo</th><th>Detalhe</th><th class="r">Valor</th></tr></thead><tbody>'+
     ult.map(function(x){
-      var det = x.tipo==="venda" ? FORMAS[x.forma]||"" : (x.categoria||"")+(x.descricao?' <span class="desc">· '+esc(x.descricao)+'</span>':"");
+      var det = x.tipo==="venda" ? FORMAS[x.forma]||"" : (x.produto?'<b>'+esc(x.produto)+'</b> <span class="desc">· '+esc(x.categoria||"")+'</span>':esc(x.categoria||""))+(x.descricao?' <span class="desc">· '+esc(x.descricao)+'</span>':"");
       return '<tr><td class="num">'+diaCurto(x.data)+'</td><td><span class="tag">'+TIPOS[x.tipo]+'</span></td><td>'+(x.tipo==="venda"?esc(det):det)+'</td><td class="r num">'+(x.tipo==="venda"?"+ ":"− ")+brl(x.valor)+'</td></tr>';
     }).join("")+'</tbody></table>' : '<div class="vazio">Nada lançado neste período.</div>';
 }
@@ -803,8 +804,8 @@ function desenharSaidas(lista){
     .sort(function(a,b){ return a.data<b.data?1:a.data>b.data?-1:0; });
   if(!sel.length){ $("sLista").innerHTML='<div class="vazio">Nenhuma compra ou despesa em '+esc(rotMes(estado.mes))+'.</div>'; return; }
   var t=0; sel.forEach(function(x){t+=x.valor;});
-  $("sLista").innerHTML='<table><thead><tr><th>Dia</th><th>Tipo</th><th>Categoria</th><th>Pago com</th><th class="r">Valor</th><th></th></tr></thead><tbody>'+
-    sel.map(function(x){ return '<tr><td class="num">'+diaCurto(x.data)+'</td><td><span class="tag">'+TIPOS[x.tipo]+'</span></td><td>'+esc(x.categoria||"")+(x.descricao?'<br><span class="desc">'+esc(x.descricao)+'</span>':'')+'</td><td>'+esc(FORMAS[x.forma]||"")+'</td><td class="r num">'+brl(x.valor)+'</td><td class="ops">'+ops(x.id)+'</td></tr>'; }).join("")+
+  $("sLista").innerHTML='<table><thead><tr><th>Dia</th><th>Tipo</th><th>Produto / categoria</th><th>Pago com</th><th class="r">Valor</th><th></th></tr></thead><tbody>'+
+    sel.map(function(x){ return '<tr><td class="num">'+diaCurto(x.data)+'</td><td><span class="tag">'+TIPOS[x.tipo]+'</span></td><td>'+(x.produto?'<b>'+esc(x.produto)+'</b><br><span class="desc">'+esc(x.categoria||"")+(x.descricao?' · '+esc(x.descricao):'')+'</span>':esc(x.categoria||"")+(x.descricao?'<br><span class="desc">'+esc(x.descricao)+'</span>':''))+'</td><td>'+esc(FORMAS[x.forma]||"")+'</td><td class="r num">'+brl(x.valor)+'</td><td class="ops">'+ops(x.id)+'</td></tr>'; }).join("")+
     '</tbody><tfoot><tr><td colspan="4">Total do mês</td><td class="r num">'+brl(t)+'</td><td></td></tr></tfoot></table>';
 }
 function desenharPerdas(lista){
@@ -820,7 +821,7 @@ function desenhar(){
   rotuloPeriodo();
   $("exemplo").hidden=!emExemplo();
   var lista=todos();
-  desenharResumo(lista); desenharVendas(lista); desenharSaidas(lista); desenharPerdas(lista); desenharPrecos(); desenharFixos();
+  sugerirProdutos(lista); desenharResumo(lista); desenharVendas(lista); desenharSaidas(lista); desenharPerdas(lista); desenharPrecos(); desenharFixos();
 }
 
 /* ---------- navegação ---------- */
@@ -915,8 +916,17 @@ function salvarItem(editId, obj){
   if(antigo && antigo.mes!==mes) mexer(antigo.mes,function(it){ delete it[id]; });
   mexer(mes,function(it){ it[id]=obj; });
 }
-$("sTipo").addEventListener("change",function(){ encherCats($("sCat"),$("sTipo").value); });
-function limparSaida(){ estado.editS=null; $("sValor").value=""; $("sDesc").value=""; $("sTit").textContent="Lançar compra ou despesa"; $("sSalvar").textContent="Salvar lançamento"; $("sCancelar").hidden=true; }
+function campoProduto(){ var c=$("sTipo").value==="compra"; $("sProdBox").hidden=!c; if(!c) $("sProd").value=""; }
+$("sTipo").addEventListener("change",function(){ encherCats($("sCat"),$("sTipo").value); campoProduto(); });
+/* Sugestões de produto: nomes já usados em compras e na tabela de preços. */
+function sugerirProdutos(lista){
+  var vistos={}, nomes=[];
+  function por(n){ n=(n||"").trim(); var k=n.toLowerCase(); if(n&&!vistos[k]){ vistos[k]=1; nomes.push(n); } }
+  for(var k in precos){ if(precos[k]) por(precos[k].produto); }
+  lista.forEach(function(x){ if(x.tipo==="compra") por(x.produto); });
+  $("sProdSug").innerHTML=nomes.sort(function(a,b){ return a.localeCompare(b,"pt-BR"); }).slice(0,80).map(function(n){ return '<option value="'+esc(n)+'"></option>'; }).join("");
+}
+function limparSaida(){ estado.editS=null; $("sValor").value=""; $("sDesc").value=""; $("sProd").value=""; $("sTit").textContent="Lançar compra ou despesa"; $("sSalvar").textContent="Salvar lançamento"; $("sCancelar").hidden=true; }
 $("sCancelar").addEventListener("click",function(){ limparSaida(); aviso("sMsg",""); });
 $("fSaida").addEventListener("submit",function(e){
   e.preventDefault();
@@ -932,6 +942,7 @@ $("fSaida").addEventListener("submit",function(e){
     else { catsExtra[tipo]=extras(tipo).concat([nome]); gravarEm("config/categorias"); cat=nome; }
   }
   var obj={tipo:tipo,data:data,valor:v,forma:$("sForma").value,categoria:cat,descricao:$("sDesc").value.trim()};
+  if(tipo==="compra" && $("sProd").value.trim()) obj.produto=$("sProd").value.trim();
   salvarItem(estado.editS,obj);
   encherCats($("sCat"),tipo,cat); atualizarCats();
   aviso("sMsg",TIPOS[obj.tipo]+" de "+brl(v)+" salva em "+diaCurto(data)+".");
@@ -956,7 +967,7 @@ function cliqueLista(e){
       estado.editP=ed.dataset.editar; $("pData").value=x.data; $("pValor").value=campoValor(x.valor); encherCats($("pCat"),"perda",x.categoria); $("pDesc").value=x.descricao||"";
       $("pTit").textContent="Editar perda"; $("pSalvar").textContent="Salvar alteração"; $("pCancelar").hidden=false; $("pValor").focus();
     } else {
-      estado.editS=ed.dataset.editar; $("sTipo").value=x.tipo; $("sData").value=x.data; $("sValor").value=campoValor(x.valor); encherCats($("sCat"),x.tipo,x.categoria); $("sDesc").value=x.descricao||""; $("sForma").value=x.forma||"dinheiro";
+      estado.editS=ed.dataset.editar; $("sTipo").value=x.tipo; $("sData").value=x.data; $("sValor").value=campoValor(x.valor); encherCats($("sCat"),x.tipo,x.categoria); campoProduto(); $("sProd").value=x.produto||""; $("sDesc").value=x.descricao||""; $("sForma").value=x.forma||"dinheiro";
       $("sTit").textContent="Editar lançamento"; $("sSalvar").textContent="Salvar alteração"; $("sCancelar").hidden=false; $("sValor").focus();
     }
   } else if(ex){
@@ -1106,7 +1117,7 @@ $("copiar").addEventListener("click",function(){
   var sel=entre(todos(),estado.mes+"-01",fimMes(estado.mes)).sort(function(a,b){ return a.data<b.data?-1:a.data>b.data?1:0; });
   var linhas=["Data\tTipo\tCategoria\tDescrição\tForma de pagamento\tValor"].concat(sel.map(function(x){
     var d=x.data.split("-");
-    return [d[2]+"/"+d[1]+"/"+d[0],TIPOS[x.tipo],x.categoria||"",(x.descricao||"").replace(/\s+/g," "),FORMAS[x.forma]||"",x.valor.toFixed(2).replace(".",",")].join("\t");
+    return [d[2]+"/"+d[1]+"/"+d[0],TIPOS[x.tipo],x.categoria||"",((x.produto?x.produto+(x.descricao?" - ":""):"")+(x.descricao||"")).replace(/\s+/g," "),FORMAS[x.forma]||"",x.valor.toFixed(2).replace(".",",")].join("\t");
   }));
   var fim=function(t){ btn.textContent=t; setTimeout(function(){ btn.textContent="Copiar mês para planilha"; },2500); };
   try{ navigator.clipboard.writeText(linhas.join("\n")).then(function(){ fim("Copiado. Cole no Excel ou Sheets"); },function(){ fim("Não foi possível copiar"); }); }
