@@ -132,6 +132,9 @@ tr:last-child td{border-bottom:0}
 td .tag{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--suave);color:var(--texto2);white-space:nowrap}
 td .desc{color:var(--texto2);font-size:12.5px}
 td.ops{white-space:nowrap;text-align:right}
+tr.clicavel{cursor:pointer}
+tr.clicavel:hover td{background:var(--suave)}
+td.neg{color:var(--ruim)}
 .vazio{color:var(--texto2);font-size:13.5px;padding:8px 0}
 tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
 .login{max-width:380px;margin:8vh auto 0;width:100%}
@@ -206,6 +209,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
       <button data-p="hoje" aria-pressed="false">Hoje</button>
       <button data-p="7d" aria-pressed="false">7 dias</button>
       <button data-p="mes" aria-pressed="true">Mês inteiro</button>
+      <button data-p="ano" aria-pressed="false">Ano</button>
     </div>
     <button class="btn direita" id="copiar">Copiar mês para planilha</button>
   </div>
@@ -230,7 +234,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
       </div>
       <div class="grade">
         <div class="cartao">
-          <h2>Últimos lançamentos</h2>
+          <h2 id="ultTit">Últimos lançamentos</h2>
           <div class="rolar" id="ultimos"></div>
         </div>
         <div class="cartao">
@@ -621,6 +625,7 @@ function intervalo(){
   var h=hoje();
   if(estado.periodo==="hoje") return [h,h];
   if(estado.periodo==="7d") return [somaDias(h,-6),h];
+  if(estado.periodo==="ano") return [estado.mes.slice(0,4)+"-01-01", estado.mes.slice(0,4)+"-12-31"];
   return [estado.mes+"-01", fimMes(estado.mes)];
 }
 function linhaBarra(rot,val,max,cls){
@@ -642,20 +647,22 @@ function taxasSobre(lista){
 function fixoEm(x,dias,noMes){ return x.freq==="semanal" ? x.valor*dias/7 : x.valor*dias/noMes; }
 function totalFixos(noMes){ var t=0; for(var k in fixos){ if(fixos[k]&&typeof fixos[k].valor==="number") t+=fixoEm(fixos[k],noMes,noMes); } return t; }
 /* Custos fixos do período: valor do mês inteiro, ou proporcional aos dias quando o período é parte do mês. */
-function fixosNoPeriodo(a,b){
+function mesTemMovimento(m){ if(m===mesDe(hoje())) return true; for(var k in (dados[m]||{})) return true; return false; }
+function fixosNoPeriodo(a,b,soComMovimento){
   var out={total:0,porNome:{}}, m=mesDe(a), ultimo=mesDe(b);
   if(emExemplo()) return out;
-  while(m<=ultimo){
+  for(; m<=ultimo; m=somaMes(m,1)){
+    if(soComMovimento && !mesTemMovimento(m)) continue;
     var ini=m+"-01", fim=fimMes(m), de=a>ini?a:ini, ate=b<fim?b:fim;
     var dias=Math.round((deIso(ate)-deIso(de))/864e5)+1, noMes=+fim.slice(8);
     for(var k in fixos){ var x=fixos[k]; if(!x||typeof x.valor!=="number") continue; var val=fixoEm(x,dias,noMes); out.total+=val; out.porNome[x.nome]=(out.porNome[x.nome]||0)+val; }
-    m=somaMes(m,1);
   }
   return out;
 }
 function desenharResumo(lista){
   var iv=intervalo(), sel=entre(lista,iv[0],iv[1]);
-  var fx=fixosNoPeriodo(iv[0],iv[1]);
+  var anual=estado.periodo==="ano";
+  var fx=fixosNoPeriodo(iv[0],iv[1],anual);
   var tx=taxasSobre(sel);
   var v=soma(sel,"venda"), c=soma(sel,"compra"), d=soma(sel,"despesa")+fx.total+tx.total, p=soma(sel,"perda");
   var res=v-c-d, dias={};
@@ -665,15 +672,22 @@ function desenharResumo(lista){
   var perdaTxt = c>0 ? '<span class="pill '+(p/c>0.1?"ruim":p/c>0.05?"alerta":"bom")+'">'+pct(p/c)+' das compras</span>' : "Sem compras no período";
   $("kpis").innerHTML =
     '<div class="kpi destaque"><span class="rot">Resultado</span><span class="val num">'+brl(res)+'</span><span class="sub">'+pillRes+'</span></div>'+
-    '<div class="kpi"><span class="rot">Vendas</span><span class="val num">'+brl(v)+'</span><span class="sub">'+(nd?("Média de "+brl(v/nd)+" por dia"):"Nenhum dia fechado")+'</span></div>'+
+    '<div class="kpi"><span class="rot">Vendas</span><span class="val num">'+brl(v)+'</span><span class="sub">'+(nd?("Média de "+brl(v/nd)+" por dia de venda"):"Nenhum dia fechado")+'</span></div>'+
     '<div class="kpi"><span class="rot">Compras</span><span class="val num">'+brl(c)+'</span><span class="sub">'+(v>0?pct(c/v)+" das vendas":"Mercadoria")+'</span></div>'+
     '<div class="kpi"><span class="rot">Despesas</span><span class="val num">'+brl(d)+'</span><span class="sub">'+(fx.total+tx.total>0?"Inclui "+brl(fx.total+tx.total)+" de custos fixos e taxas":v>0?pct(d/v)+" das vendas":"Custos fixos e do dia")+'</span></div>'+
     '<div class="kpi"><span class="rot">Perdas</span><span class="val num">'+brl(p)+'</span><span class="sub">'+perdaTxt+'</span></div>';
 
   // gráfico: no modo "hoje" mostra os últimos 7 dias
-  var g = estado.periodo==="hoje" ? [somaDias(hoje(),-6),hoje()] : iv;
-  $("grafTit").textContent = estado.periodo==="mes" ? "Vendas e saídas por dia" : "Vendas e saídas nos últimos 7 dias";
-  grafico(entre(lista,g[0],g[1]), g[0], g[1]);
+  var meses=null;
+  if(anual){
+    meses=resumoMeses(lista, estado.mes.slice(0,4));
+    $("grafTit").textContent="Vendas e saídas por mês em "+estado.mes.slice(0,4);
+    graficoAno(meses);
+  } else {
+    var g = estado.periodo==="hoje" ? [somaDias(hoje(),-6),hoje()] : iv;
+    $("grafTit").textContent = estado.periodo==="mes" ? "Vendas e saídas por dia" : "Vendas e saídas nos últimos 7 dias";
+    grafico(entre(lista,g[0],g[1]), g[0], g[1]);
+  }
 
   var porForma={dinheiro:0,pix:0,debito:0,credito:0};
   sel.forEach(function(x){ if(x.tipo==="venda" && porForma[x.forma]!=null) porForma[x.forma]+=x.valor; });
@@ -689,12 +703,53 @@ function desenharResumo(lista){
   $("cats").innerHTML = cs.length ? cs.slice(0,8).map(function(k){ return linhaBarra(k,porCat[k],porCat[cs[0]],"saida"); }).join("")
     : '<div class="vazio">Nenhuma compra ou despesa no período.</div>';
 
+  $("ultTit").textContent = anual ? "Mês a mês" : "Últimos lançamentos";
+  if(anual){ tabelaAno(meses); return; }
   var ult=sel.slice().sort(function(a,b){ return a.data<b.data?1:a.data>b.data?-1:0; }).slice(0,8);
   $("ultimos").innerHTML = ult.length ? '<table><thead><tr><th>Dia</th><th>Tipo</th><th>Detalhe</th><th class="r">Valor</th></tr></thead><tbody>'+
     ult.map(function(x){
       var det = x.tipo==="venda" ? FORMAS[x.forma]||"" : (x.categoria||"")+(x.descricao?' <span class="desc">· '+esc(x.descricao)+'</span>':"");
       return '<tr><td class="num">'+diaCurto(x.data)+'</td><td><span class="tag">'+TIPOS[x.tipo]+'</span></td><td>'+(x.tipo==="venda"?esc(det):det)+'</td><td class="r num">'+(x.tipo==="venda"?"+ ":"− ")+brl(x.valor)+'</td></tr>';
     }).join("")+'</tbody></table>' : '<div class="vazio">Nada lançado neste período.</div>';
+}
+var MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+/* Um resumo por mês do ano: vendas, compras, despesas (com custos fixos e taxas), perdas e resultado. */
+function resumoMeses(lista, ano){
+  var out=[];
+  for(var i=1;i<=12;i++){
+    var m=ano+"-"+pad(i), sel=entre(lista,m+"-01",fimMes(m));
+    var fx=fixosNoPeriodo(m+"-01",fimMes(m),true), tx=taxasSobre(sel);
+    var v=soma(sel,"venda"), c=soma(sel,"compra"), d=soma(sel,"despesa")+fx.total+tx.total;
+    out.push({mes:m, rot:MESES[i-1], v:v, c:c, d:d, p:soma(sel,"perda"), res:v-c-d, mov:sel.length>0||d>0});
+  }
+  return out;
+}
+function graficoAno(meses){
+  var max=0; meses.forEach(function(x){ max=Math.max(max,x.v,x.c+x.d); });
+  if(max<=0){ $("graf").innerHTML='<div class="vazio">Sem movimento neste ano.</div>'; return; }
+  var passo=Math.pow(10,Math.floor(Math.log10(max))); var q=max/passo; passo = q<=2?passo/2 : q<=5?passo : passo*2;
+  var topo=Math.ceil(max/passo)*passo;
+  var W=720,H=230,L=64,R=8,T=10,B=26, pw=W-L-R, ph=H-T-B, gw=pw/12, bw=16;
+  var s='<svg class="graf" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Vendas e saídas por mês">';
+  for(var y=0;y<=topo+0.001;y+=passo){ var py=T+ph-(y/topo)*ph; s+='<line class="gl" x1="'+L+'" x2="'+(W-R)+'" y1="'+py.toFixed(1)+'" y2="'+py.toFixed(1)+'"/><text x="'+(L-8)+'" y="'+(py+4).toFixed(1)+'" text-anchor="end">'+brl0(y)+'</text>'; }
+  meses.forEach(function(x,i){
+    var cx=L+gw*i+gw/2, sd=x.c+x.d, hv=x.v/topo*ph, hs=sd/topo*ph;
+    if(x.v>0) s+='<rect class="bv" x="'+(cx-bw-1).toFixed(1)+'" y="'+(T+ph-hv).toFixed(1)+'" width="'+bw+'" height="'+hv.toFixed(1)+'" rx="2"><title>'+x.rot+' — vendas '+brl(x.v)+'</title></rect>';
+    if(sd>0) s+='<rect class="bs" x="'+(cx+1).toFixed(1)+'" y="'+(T+ph-hs).toFixed(1)+'" width="'+bw+'" height="'+hs.toFixed(1)+'" rx="2"><title>'+x.rot+' — saídas '+brl(sd)+'</title></rect>';
+    s+='<text x="'+cx.toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+x.rot+'</text>';
+  });
+  $("graf").innerHTML=s+'</svg>';
+}
+function tabelaAno(meses){
+  var t={v:0,c:0,d:0,res:0};
+  var linhas=meses.map(function(x){
+    t.v+=x.v; t.c+=x.c; t.d+=x.d; t.res+=x.res;
+    if(!x.mov) return '<tr><td>'+x.rot+'</td><td class="r desc" colspan="5">sem lançamentos</td></tr>';
+    return '<tr class="clicavel" data-mes="'+x.mes+'" title="Abrir este mês"><td><b>'+x.rot+'</b></td><td class="r num">'+brl(x.v)+'</td><td class="r num">'+brl(x.c)+'</td><td class="r num">'+brl(x.d)+'</td><td class="r num'+(x.res<0?" neg":"")+'"><b>'+brl(x.res)+'</b></td><td class="r num">'+(x.v>0?pct(x.res/x.v):"")+'</td></tr>';
+  }).join("");
+  $("ultimos").innerHTML='<table><thead><tr><th>Mês</th><th class="r">Vendas</th><th class="r">Compras</th><th class="r">Despesas</th><th class="r">Resultado</th><th class="r">Margem</th></tr></thead><tbody>'+linhas+
+    '</tbody><tfoot><tr><td>Ano</td><td class="r num">'+brl(t.v)+'</td><td class="r num">'+brl(t.c)+'</td><td class="r num">'+brl(t.d)+'</td><td class="r num'+(t.res<0?" neg":"")+'">'+brl(t.res)+'</td><td class="r num">'+(t.v>0?pct(t.res/t.v):"")+'</td></tr></tfoot></table>'+
+    '<p class="nota" style="margin-top:10px">Despesas incluem custos fixos e taxas. Os custos fixos contam só nos meses com lançamentos e no mês atual. Clique em um mês para abrir.</p>';
 }
 function grafico(lista,a,b){
   var dias=[], d=a; while(d<=b){ dias.push(d); d=somaDias(d,1); }
@@ -749,7 +804,7 @@ function desenharPerdas(lista){
     '</tbody><tfoot><tr><td colspan="3">Total do mês'+(c>0?" · "+pct(t/c)+" das compras":"")+'</td><td class="r num">'+brl(t)+'</td><td></td></tr></tfoot></table>';
 }
 function desenhar(){
-  $("mesRot").textContent=rotMes(estado.mes);
+  rotuloPeriodo();
   $("exemplo").hidden=!emExemplo();
   var lista=todos();
   desenharResumo(lista); desenharVendas(lista); desenharSaidas(lista); desenharPerdas(lista); desenharPrecos(); desenharFixos();
@@ -757,6 +812,14 @@ function desenhar(){
 
 /* ---------- navegação ---------- */
 var ABAS=["resumo","vendas","saidas","perdas","fixos","precos"];
+function vendoAno(){ return estado.aba==="resumo" && estado.periodo==="ano"; }
+function rotuloPeriodo(){
+  var a=vendoAno();
+  $("mesRot").textContent = a ? estado.mes.slice(0,4) : rotMes(estado.mes);
+  $("mesAnt").setAttribute("aria-label", a?"Ano anterior":"Mês anterior");
+  $("mesProx").setAttribute("aria-label", a?"Próximo ano":"Próximo mês");
+  $("copiar").hidden = a || estado.aba==="fixos";
+}
 function abrir(aba){
   if(ABAS.indexOf(aba)<0) aba="resumo";
   estado.aba=aba;
@@ -764,15 +827,17 @@ function abrir(aba){
   Array.prototype.forEach.call(document.querySelectorAll("nav.abas button"),function(b){ b.setAttribute("aria-selected", b.dataset.aba===aba?"true":"false"); });
   $("periodo").hidden = aba!=="resumo";
   $("barra").hidden = aba==="precos";
-  $("copiar").hidden = aba==="fixos";
+  rotuloPeriodo();
 }
 $("abas").addEventListener("click",function(e){ var b=e.target.closest("button"); if(b){ abrir(b.dataset.aba); try{ location.hash=b.dataset.aba; }catch(_){} } });
 window.addEventListener("hashchange",function(){ abrir(location.hash.slice(1)); });
-$("mesAnt").addEventListener("click",function(){ estado.mes=somaMes(estado.mes,-1); definirPeriodo("mes"); });
-$("mesProx").addEventListener("click",function(){ estado.mes=somaMes(estado.mes,1); definirPeriodo("mes"); });
+function andar(n){ if(vendoAno()){ estado.mes=somaMes(estado.mes,12*n); desenhar(); } else { estado.mes=somaMes(estado.mes,n); definirPeriodo("mes"); } }
+$("mesAnt").addEventListener("click",function(){ andar(-1); });
+$("mesProx").addEventListener("click",function(){ andar(1); });
+$("ultimos").addEventListener("click",function(e){ var tr=e.target.closest("[data-mes]"); if(tr){ estado.mes=tr.dataset.mes; definirPeriodo("mes"); } });
 function definirPeriodo(p){
   estado.periodo=p;
-  if(p!=="mes") estado.mes=mesDe(hoje());
+  if(p==="hoje"||p==="7d") estado.mes=mesDe(hoje());
   Array.prototype.forEach.call($("periodo").children,function(b){ b.setAttribute("aria-pressed", b.dataset.p===p?"true":"false"); });
   desenhar();
 }
