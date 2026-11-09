@@ -328,11 +328,14 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
       <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
       <div class="cartao">
         <h2 id="fxTit">Adicionar custo fixo da banca</h2>
-        <p class="nota">Gastos que se repetem todo mês, vendendo ou não: aluguel do box, energia, salários. Entram sozinhos nas despesas de cada mês. Não lance esses mesmos gastos em Compras e despesas, para não contar duas vezes.</p>
+        <p class="nota">Gastos que se repetem toda semana ou todo mês, vendendo ou não: aluguel do box, energia, salários. Entram sozinhos nas despesas. Não lance esses mesmos gastos em Compras e despesas, para não contar duas vezes.</p>
         <form class="lanc" id="fFixo" novalidate>
           <div class="campo"><label for="fxNome">Custo</label><input id="fxNome" maxlength="40" list="fxSug" placeholder="Ex.: Aluguel do box" autocomplete="off">
             <datalist id="fxSug"><option value="Aluguel do box"></option><option value="Taxa da Ceasa"></option><option value="Energia"></option><option value="Água"></option><option value="Funcionários"></option><option value="Internet e telefone"></option><option value="Contador"></option><option value="MEI / impostos"></option><option value="Aluguel da maquininha"></option></datalist></div>
-          <div class="campo"><label for="fxValor">Valor por mês (R$)</label><input id="fxValor" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
+          <div class="duo">
+            <div class="campo"><label for="fxFreq">Cobrança</label><select id="fxFreq"><option value="mensal">Mensal</option><option value="semanal">Semanal</option></select></div>
+            <div class="campo"><label for="fxValor" id="fxValorRot">Valor por mês (R$)</label><input id="fxValor" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
+          </div>
           <div class="acoes"><button class="btn pri" type="submit" id="fxSalvar">Salvar custo fixo</button><button class="btn" type="button" id="fxCancelar" hidden>Cancelar edição</button></div>
           <div class="msg" id="fxMsg" role="status"></div>
         </form>
@@ -355,7 +358,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
       </div>
       </div>
       <div class="cartao">
-        <h2>Custos fixos por mês</h2>
+        <h2>Custos fixos cadastrados</h2>
         <div class="mini3" id="fxResumo"></div>
         <div class="rolar" id="fxLista"></div>
         <h2>Taxas no mês selecionado</h2>
@@ -635,15 +638,17 @@ function taxasSobre(lista){
   });
   return out;
 }
-function totalFixos(){ var t=0; for(var k in fixos){ if(fixos[k]&&typeof fixos[k].valor==="number") t+=fixos[k].valor; } return t; }
+/* Valor de um custo fixo em "dias" dias de um mês com "noMes" dias: semanal = valor/7 por dia; mensal = valor/noMes por dia. */
+function fixoEm(x,dias,noMes){ return x.freq==="semanal" ? x.valor*dias/7 : x.valor*dias/noMes; }
+function totalFixos(noMes){ var t=0; for(var k in fixos){ if(fixos[k]&&typeof fixos[k].valor==="number") t+=fixoEm(fixos[k],noMes,noMes); } return t; }
 /* Custos fixos do período: valor do mês inteiro, ou proporcional aos dias quando o período é parte do mês. */
 function fixosNoPeriodo(a,b){
   var out={total:0,porNome:{}}, m=mesDe(a), ultimo=mesDe(b);
   if(emExemplo()) return out;
   while(m<=ultimo){
     var ini=m+"-01", fim=fimMes(m), de=a>ini?a:ini, ate=b<fim?b:fim;
-    var dias=Math.round((deIso(ate)-deIso(de))/864e5)+1, noMes=+fim.slice(8), fr=dias/noMes;
-    for(var k in fixos){ var x=fixos[k]; if(!x||typeof x.valor!=="number") continue; out.total+=x.valor*fr; out.porNome[x.nome]=(out.porNome[x.nome]||0)+x.valor*fr; }
+    var dias=Math.round((deIso(ate)-deIso(de))/864e5)+1, noMes=+fim.slice(8);
+    for(var k in fixos){ var x=fixos[k]; if(!x||typeof x.valor!=="number") continue; var val=fixoEm(x,dias,noMes); out.total+=val; out.porNome[x.nome]=(out.porNome[x.nome]||0)+val; }
     m=somaMes(m,1);
   }
   return out;
@@ -758,7 +763,8 @@ function abrir(aba){
   ABAS.forEach(function(a){ $("aba-"+a).hidden = a!==aba; });
   Array.prototype.forEach.call(document.querySelectorAll("nav.abas button"),function(b){ b.setAttribute("aria-selected", b.dataset.aba===aba?"true":"false"); });
   $("periodo").hidden = aba!=="resumo";
-  $("barra").hidden = aba==="precos"||aba==="fixos";
+  $("barra").hidden = aba==="precos";
+  $("copiar").hidden = aba==="fixos";
 }
 $("abas").addEventListener("click",function(e){ var b=e.target.closest("button"); if(b){ abrir(b.dataset.aba); try{ location.hash=b.dataset.aba; }catch(_){} } });
 window.addEventListener("hashchange",function(){ abrir(location.hash.slice(1)); });
@@ -859,16 +865,19 @@ $("pLista").addEventListener("click",cliqueLista);
 
 /* ---------- custos fixos ---------- */
 var editFixo=null;
+function rotFixo(){ $("fxValorRot").textContent = $("fxFreq").value==="semanal" ? "Valor por semana (R$)" : "Valor por mês (R$)"; }
+$("fxFreq").addEventListener("change",rotFixo);
 function limparFixo(){ editFixo=null; $("fxNome").value=""; $("fxValor").value=""; $("fxTit").textContent="Adicionar custo fixo da banca"; $("fxSalvar").textContent="Salvar custo fixo"; $("fxCancelar").hidden=true; }
 $("fxCancelar").addEventListener("click",function(){ limparFixo(); aviso("fxMsg",""); });
 $("fFixo").addEventListener("submit",function(e){
   e.preventDefault();
   var nome=$("fxNome").value.trim(), v=lerValor($("fxValor").value);
   if(!nome){ aviso("fxMsg","Dê um nome ao custo, como Aluguel do box.",true); $("fxNome").focus(); return; }
-  if(isNaN(v)||v<=0){ aviso("fxMsg","Informe o valor por mês, como 1.200,00.",true); $("fxValor").focus(); return; }
-  fixos[editFixo||novoId()]={nome:nome,valor:v};
+  var freq=$("fxFreq").value==="semanal"?"semanal":"mensal";
+  if(isNaN(v)||v<=0){ aviso("fxMsg","Informe o valor, como 1.200,00.",true); $("fxValor").focus(); return; }
+  fixos[editFixo||novoId()]={nome:nome,valor:v,freq:freq};
   gravarEm("config/fixos");
-  aviso("fxMsg",nome+" salvo: "+brl(v)+" por mês.");
+  aviso("fxMsg",nome+" salvo: "+brl(v)+(freq==="semanal"?" por semana.":" por mês."));
   limparFixo(); desenhar(); $("fxNome").focus();
 });
 var TXC={debito:"txDebito",credito:"txCredito",pix:"txPix",todas:"txTodas"};
@@ -890,19 +899,19 @@ function desenharTaxas(){
 }
 function desenharFixos(){
   desenharTaxas();
-  var ks=Object.keys(fixos).filter(function(k){ return fixos[k]&&fixos[k].nome; }).sort(function(a,b){ return fixos[b].valor-fixos[a].valor; });
-  var t=totalFixos(), noMes=+fimMes(mesDe(hoje())).slice(8);
-  $("fxResumo").innerHTML='<div><span>Total por mês</span><b class="num">'+brl(t)+'</b></div><div><span>Por dia do mês</span><b class="num">'+brl(t/noMes)+'</b></div><div><span>Por dia aberto (seg a sáb)</span><b class="num">'+brl(t/26)+'</b></div>';
+  var ks=Object.keys(fixos).filter(function(k){ return fixos[k]&&fixos[k].nome; }).sort(function(a,b){ return fixoEm(fixos[b],30,30)-fixoEm(fixos[a],30,30); });
+  var noMes=+fimMes(estado.mes).slice(8), t=totalFixos(noMes);
+  $("fxResumo").innerHTML='<div><span>Total em '+esc(rotMes(estado.mes))+'</span><b class="num">'+brl(t)+'</b></div><div><span>Por dia do mês</span><b class="num">'+brl(t/noMes)+'</b></div><div><span>Por dia aberto (seg a sáb)</span><b class="num">'+brl(t/26)+'</b></div>';
   if(!ks.length){ $("fxLista").innerHTML='<div class="vazio">Nenhum custo fixo cadastrado. Adicione o aluguel do box, a energia e os outros gastos que se repetem todo mês.</div>'; return; }
-  $("fxLista").innerHTML='<table><thead><tr><th>Custo</th><th class="r">Por mês</th><th class="r">Parte do total</th><th></th></tr></thead><tbody>'+
-    ks.map(function(k){ var x=fixos[k]; return '<tr><td><b>'+esc(x.nome)+'</b></td><td class="r num">'+brl(x.valor)+'</td><td class="r num">'+(t>0?pct(x.valor/t):"")+'</td><td class="ops"><button class="btn mini" data-fxeditar="'+esc(k)+'">Editar</button> <button class="btn mini perigo" data-fxtirar="'+esc(k)+'">Excluir</button></td></tr>'; }).join("")+
-    '</tbody><tfoot><tr><td>Total</td><td class="r num">'+brl(t)+'</td><td></td><td></td></tr></tfoot></table>';
+  $("fxLista").innerHTML='<table><thead><tr><th>Custo</th><th>Cobrança</th><th class="r">Valor</th><th class="r">No mês</th><th></th></tr></thead><tbody>'+
+    ks.map(function(k){ var x=fixos[k], sem=x.freq==="semanal"; return '<tr><td><b>'+esc(x.nome)+'</b></td><td><span class="tag">'+(sem?"Semanal":"Mensal")+'</span></td><td class="r num">'+brl(x.valor)+'</td><td class="r num">'+brl(fixoEm(x,noMes,noMes))+'</td><td class="ops"><button class="btn mini" data-fxeditar="'+esc(k)+'">Editar</button> <button class="btn mini perigo" data-fxtirar="'+esc(k)+'">Excluir</button></td></tr>'; }).join("")+
+    '</tbody><tfoot><tr><td colspan="3">Total no mês</td><td class="r num">'+brl(t)+'</td><td></td></tr></tfoot></table>';
 }
 $("fxLista").addEventListener("click",function(e){
   var ed=e.target.closest("[data-fxeditar]"), t=e.target.closest("[data-fxtirar]");
   if(ed){
     var x=fixos[ed.dataset.fxeditar]; if(!x) return;
-    editFixo=ed.dataset.fxeditar; $("fxNome").value=x.nome; $("fxValor").value=campoValor(x.valor);
+    editFixo=ed.dataset.fxeditar; $("fxNome").value=x.nome; $("fxValor").value=campoValor(x.valor); $("fxFreq").value=x.freq==="semanal"?"semanal":"mensal"; rotFixo();
     $("fxTit").textContent="Editar custo fixo"; $("fxSalvar").textContent="Salvar alteração"; $("fxCancelar").hidden=false; $("fxValor").focus();
   } else if(t){
     if(t.dataset.certeza){ if(editFixo===t.dataset.fxtirar) limparFixo(); delete fixos[t.dataset.fxtirar]; gravarEm("config/fixos"); desenhar(); }
