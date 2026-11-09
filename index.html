@@ -146,6 +146,9 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
 .mini3 div{background:var(--suave);border-radius:12px;padding:10px 12px;min-width:0}
 .mini3 span{display:block;font-size:11.5px;font-weight:700;color:var(--texto2);text-transform:uppercase;letter-spacing:.04em}
 .mini3 b{font-family:var(--display);font-weight:800;font-size:16px;overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--suave);border-radius:999px;padding:4px 6px 4px 10px;font-size:12.5px;font-weight:600}
+.chip button{border:0;background:transparent;cursor:pointer;font-weight:800;color:var(--ruim);padding:0 4px;border-radius:999px}
 .sair{background:rgba(255,255,255,.14);border:0;color:#fff;font-weight:700;font-size:12px;padding:6px 10px;border-radius:999px;cursor:pointer}
 [hidden]{display:none!important}
 
@@ -288,11 +291,15 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
             <div class="campo"><label for="sValor">Valor</label><input id="sValor" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
             <div class="campo"><label for="sCat">Categoria</label><select id="sCat"></select></div>
           </div>
+          <div class="campo" id="sCatNovaBox" hidden><label for="sCatNova">Nome da nova categoria</label><input id="sCatNova" maxlength="30" placeholder="Ex.: Sacolas, Gelo, Combustível" autocomplete="off"></div>
           <div class="campo"><label for="sDesc" id="sDescRot">Fornecedor ou descrição</label><input id="sDesc" maxlength="80" placeholder="Ex.: Box 14, 20 cx de laranja" autocomplete="off"></div>
           <div class="campo"><label for="sForma">Pago com</label>
             <select id="sForma"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option><option value="debito">Cartão débito</option><option value="credito">Cartão crédito</option><option value="boleto">Boleto / a prazo</option></select></div>
           <div class="acoes"><button class="btn pri" type="submit" id="sSalvar">Salvar lançamento</button><button class="btn" type="button" id="sCancelar" hidden>Cancelar edição</button></div>
           <div class="msg" id="sMsg" role="status"></div>
+          <div id="sCatsBox" hidden>
+            <div class="campo"><label>Categorias que você criou</label><div class="chips" id="sCatsLista"></div></div>
+          </div>
         </form>
       </div>
       <div class="cartao">
@@ -497,14 +504,14 @@ function soma(lista,tipo){ var s=0; lista.forEach(function(x){ if(x.tipo===tipo)
 var FB_V="12.19.0";
 var FB_CFG={apiKey:"AIzaSyDa64yQm3mlngb730eEmJNnRHk6xnbOGfY",authDomain:"frutai-c468e.firebaseapp.com",projectId:"frutai-c468e",storageBucket:"frutai-c468e.firebasestorage.app",messagingSenderId:"769992603459",appId:"1:769992603459:web:f0ec902404ce33eced61f6"};
 
-var be=null, local=false, rodando={}, pendente={}, precos={}, fixos={}, taxas={}, ouvintes=[];
+var be=null, local=false, rodando={}, pendente={}, precos={}, fixos={}, taxas={}, catsExtra={}, ouvintes=[];
 var CHAVE="frutai-financeiro-v1";
 function estadoUI(cls,txt){ var e=$("estado"); e.className="estado "+cls; e.querySelector("span").textContent=txt; }
 function erroUI(txt){ var e=$("erro"); e.textContent=txt||""; e.hidden=!txt; }
-function corpo(path){ return path==="config/precos" ? {itens:clone(precos)} : path==="config/fixos" ? {itens:clone(fixos)} : path==="config/taxas" ? {itens:clone(taxas)} : {itens:clone(dados[path.slice(6)])}; }
+function corpo(path){ return path==="config/precos" ? {itens:clone(precos)} : path==="config/fixos" ? {itens:clone(fixos)} : path==="config/taxas" ? {itens:clone(taxas)} : path==="config/categorias" ? {itens:clone(catsExtra)} : {itens:clone(dados[path.slice(6)])}; }
 function gravarEm(path){
   if(local){
-    try{ localStorage.setItem(CHAVE, JSON.stringify({dados:dados,precos:precos,fixos:fixos,taxas:taxas})); }
+    try{ localStorage.setItem(CHAVE, JSON.stringify({dados:dados,precos:precos,fixos:fixos,taxas:taxas,categorias:catsExtra})); }
     catch(e){ erroUI("Não foi possível salvar neste aparelho. Copie o mês para a planilha para não perder os lançamentos."); }
     return;
   }
@@ -537,7 +544,8 @@ function mostrar(qual){
 }
 function iniciarLocal(){
   local=true; carregado=true;
-  try{ var g=JSON.parse(localStorage.getItem(CHAVE)||"{}")||{}; dados=g.dados||{}; precos=g.precos||{}; fixos=g.fixos||{}; taxas=g.taxas||{}; }catch(e){ dados={}; precos={}; fixos={}; taxas={}; }
+  try{ var g=JSON.parse(localStorage.getItem(CHAVE)||"{}")||{}; dados=g.dados||{}; precos=g.precos||{}; fixos=g.fixos||{}; taxas=g.taxas||{}; catsExtra=g.categorias||{}; }catch(e){ dados={}; precos={}; fixos={}; taxas={}; catsExtra={}; }
+  atualizarCats();
   preencherTaxas();
   estadoUI("", "Salvo só neste aparelho");
   $("semConfig").hidden=false;
@@ -571,6 +579,10 @@ function ouvir(){
     if(pendente["config/taxas"]||rodando["config/taxas"]) return;
     taxas=clone(itens); preencherTaxas(); desenhar();
   }, erroLeitura));
+  ouvintes.push(be.ouvirCategorias(function(itens){
+    if(pendente["config/categorias"]||rodando["config/categorias"]) return;
+    catsExtra=clone(itens); atualizarCats();
+  }, erroLeitura));
 }
 function iniciar(){
   if(window.__MOCK_BACKEND){ be=window.__MOCK_BACKEND; aoEntrar(); return; }
@@ -584,6 +596,7 @@ function iniciar(){
       ouvirMeses:function(cb,err){ return F.onSnapshot(F.collection(db,"meses"),function(sn){ cb(sn.docs.map(function(d){ return {id:d.id,itens:(d.data()||{}).itens}; })); },err); },
       ouvirPrecos:function(cb,err){ return F.onSnapshot(F.doc(db,"config","precos"),function(sn){ cb(sn.exists()?(sn.data().itens||{}):{}); },err); },
       ouvirFixos:function(cb,err){ return F.onSnapshot(F.doc(db,"config","fixos"),function(sn){ cb(sn.exists()?(sn.data().itens||{}):{}); },err); },
+      ouvirCategorias:function(cb,err){ return F.onSnapshot(F.doc(db,"config","categorias"),function(sn){ cb(sn.exists()?(sn.data().itens||{}):{}); },err); },
       ouvirTaxas:function(cb,err){ return F.onSnapshot(F.doc(db,"config","taxas"),function(sn){ cb(sn.exists()?(sn.data().itens||{}):{}); },err); },
       entrar:function(e,p){ return U.signInWithEmailAndPassword(auth,e,p); },
       sair:function(){ return U.signOut(auth); }
@@ -592,7 +605,7 @@ function iniciar(){
       if(u){ aoEntrar(); }
       else{
         ouvintes.forEach(function(f){ f(); }); ouvintes=[];
-        dados={}; precos={}; fixos={}; taxas={}; carregado=false;
+        dados={}; precos={}; fixos={}; taxas={}; catsExtra={}; carregado=false;
         $("sair").hidden=true; estadoUI("","Faça o login"); mostrar("login");
       }
     });
@@ -868,10 +881,33 @@ $("fVenda").addEventListener("submit",function(e){
 $("vLista").addEventListener("click",function(e){ var b=e.target.closest("[data-dia]"); if(b){ carregarDia(b.dataset.dia); aviso("vMsg","Editando "+diaCurto(b.dataset.dia)+"."); $("vDinheiro").focus(); } });
 
 /* ---------- compras, despesas e perdas ---------- */
+function extras(tipo){ var a=catsExtra[tipo]; return Array.isArray(a)?a.filter(function(c){ return typeof c==="string"&&c; }):[]; }
+function catsDe(tipo){ return CATS[tipo].concat(extras(tipo)); }
 function encherCats(sel,tipo,atual){
-  sel.innerHTML=CATS[tipo].map(function(c){ return '<option>'+esc(c)+'</option>'; }).join("");
-  if(atual){ if(CATS[tipo].indexOf(atual)<0) sel.insertAdjacentHTML("beforeend",'<option>'+esc(atual)+'</option>'); sel.value=atual; }
+  var lista=catsDe(tipo), nova=(tipo==="compra"||tipo==="despesa");
+  if(atual && lista.indexOf(atual)<0) lista=lista.concat([atual]);
+  sel.innerHTML=lista.map(function(c){ return '<option value="'+esc(c)+'">'+esc(c)+'</option>'; }).join("")+(nova?'<option value="__nova">+ Nova categoria…</option>':'');
+  if(atual) sel.value=atual;
+  if(sel.id==="sCat") mostrarNova();
 }
+function mostrarNova(){ var n=$("sCat").value==="__nova"; $("sCatNovaBox").hidden=!n; if(!n) $("sCatNova").value=""; }
+$("sCat").addEventListener("change",function(){ mostrarNova(); if($("sCat").value==="__nova") $("sCatNova").focus(); });
+/* Redesenha o seletor e a lista de categorias criadas, mantendo o que estava escolhido. */
+function atualizarCats(){
+  var tipo=$("sTipo").value, atual=$("sCat").value, digitando=$("sCatNova").value;
+  encherCats($("sCat"),tipo, atual&&atual!=="__nova"?atual:null);
+  if(atual==="__nova"){ $("sCat").value="__nova"; mostrarNova(); $("sCatNova").value=digitando; }
+  var html="";
+  ["compra","despesa"].forEach(function(t){ extras(t).forEach(function(c){ html+='<span class="chip">'+esc(c)+' <span class="desc">· '+(t==="compra"?"compra":"despesa")+'</span><button type="button" data-tirarcat="'+esc(c)+'" data-tipo="'+t+'" aria-label="Excluir a categoria '+esc(c)+'">×</button></span>'; }); });
+  $("sCatsLista").innerHTML=html; $("sCatsBox").hidden=!html;
+}
+$("sCatsLista").addEventListener("click",function(e){
+  var b=e.target.closest("[data-tirarcat]"); if(!b) return;
+  var t=b.dataset.tipo;
+  catsExtra[t]=extras(t).filter(function(c){ return c!==b.dataset.tirarcat; });
+  gravarEm("config/categorias"); atualizarCats();
+  aviso("sMsg","Categoria "+b.dataset.tirarcat+" excluída. Os lançamentos antigos continuam com ela.");
+});
 function acharItem(id){ for(var m in dados){ if(dados[m][id]) return {mes:m,item:dados[m][id]}; } return null; }
 function salvarItem(editId, obj){
   var antigo = editId ? acharItem(editId) : null;
@@ -887,8 +923,17 @@ $("fSaida").addEventListener("submit",function(e){
   var data=$("sData").value, v=lerValor($("sValor").value);
   if(!data){ aviso("sMsg","Escolha o dia.",true); return; }
   if(isNaN(v)||v<=0){ aviso("sMsg","Informe um valor maior que zero, como 350,00.",true); $("sValor").focus(); return; }
-  var obj={tipo:$("sTipo").value,data:data,valor:v,forma:$("sForma").value,categoria:$("sCat").value,descricao:$("sDesc").value.trim()};
+  var tipo=$("sTipo").value, cat=$("sCat").value;
+  if(cat==="__nova"){
+    var nome=$("sCatNova").value.trim().replace(/\s+/g," ");
+    if(!nome){ aviso("sMsg","Dê um nome à nova categoria.",true); $("sCatNova").focus(); return; }
+    var igual=catsDe(tipo).filter(function(c){ return c.toLowerCase()===nome.toLowerCase(); })[0];
+    if(igual) cat=igual;
+    else { catsExtra[tipo]=extras(tipo).concat([nome]); gravarEm("config/categorias"); cat=nome; }
+  }
+  var obj={tipo:tipo,data:data,valor:v,forma:$("sForma").value,categoria:cat,descricao:$("sDesc").value.trim()};
   salvarItem(estado.editS,obj);
+  encherCats($("sCat"),tipo,cat); atualizarCats();
   aviso("sMsg",TIPOS[obj.tipo]+" de "+brl(v)+" salva em "+diaCurto(data)+".");
   limparSaida(); $("sValor").focus();
 });
