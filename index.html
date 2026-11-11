@@ -57,6 +57,10 @@ h3{margin:0;font-weight:800;font-size:13px;text-transform:uppercase;letter-spaci
 .grupo{display:flex;flex-direction:column;gap:8px}
 .prod{background:var(--cartao);border:1px solid var(--linha);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px}
 .prod.tem{border-color:var(--verde)}
+.prod .foto{width:68px;height:68px;border-radius:12px;object-fit:cover;background:var(--suave);flex:none;display:grid;place-items:center;font-weight:800;font-size:24px;color:var(--texto2)}
+.filtros{display:flex;gap:6px;flex-wrap:wrap}
+.filtros button{border:1px solid var(--linha);background:var(--cartao);border-radius:999px;padding:8px 14px;font-weight:700;font-size:13.5px;cursor:pointer;color:var(--texto2)}
+.filtros button[aria-pressed="true"]{background:var(--verde);border-color:var(--verde);color:#fff}
 .prod .inf{flex:1;min-width:0}
 .prod .nome{font-weight:700;overflow-wrap:anywhere}
 .prod .preco{font-size:13px;color:var(--texto2)}
@@ -127,6 +131,7 @@ footer a{color:inherit}
   <div class="aviso" id="avisoLoja" hidden></div>
   <div class="aviso erro" id="erroGeral" hidden></div>
   <input class="busca" id="busca" type="search" placeholder="Procurar fruta, verdura ou legume" aria-label="Procurar produto">
+  <div class="filtros" id="filtros" role="group" aria-label="Mostrar" hidden></div>
   <div id="produtos" class="grupo"><p class="nota">Carregando os produtos…</p></div>
 
   <section class="cartao" id="secPedido" hidden>
@@ -219,7 +224,8 @@ footer a{color:inherit}
 const $ = id => document.getElementById(id);
 const FB_V = "12.19.0";
 const FB_CFG = {apiKey:"AIzaSyDa64yQm3mlngb730eEmJNnRHk6xnbOGfY",authDomain:"frutai-c468e.firebaseapp.com",projectId:"frutai-c468e",storageBucket:"frutai-c468e.firebasestorage.app",messagingSenderId:"769992603459",appId:"1:769992603459:web:f0ec902404ce33eced61f6"};
-const CATS = ["Frutas","Verduras","Legumes","Outros"];
+const CATS = ["Frutas","Verduras","Outros"];
+const catDe = p => p.cat==="Legumes" ? "Verduras" : CATS.includes(p.cat) ? p.cat : "Outros";
 const PASSO = {kg:0.5};
 const ETAPAS = [
   ["novo","Pedido recebido","Já chegou no Frutaí."],
@@ -237,6 +243,7 @@ const dig = s => String(s||"").replace(/\D/g,"");
 function lerValor(txt){ let s=String(txt||"").replace(/[R$\s]/g,""); if(!s) return NaN; if(s.includes(",")) s=s.replace(/\./g,"").replace(",","."); const n=parseFloat(s); return isFinite(n)&&n>0?r2(n):NaN; }
 const guarda = { get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
 
+let filtroCat = "Todos", fotos = {};
 let itens = {}, loja = {aberta:true,taxaEntrega:0,minimo:0}, carrinho = {}, local = null, be = null, pararAcomp = null, carregouCat = false;
 
 /* ---------- backend ---------- */
@@ -247,6 +254,7 @@ function backend(){
     const db = F.getFirestore(A.initializeApp(FB_CFG));
     return {
       verCatalogo(cb,err){ return F.onSnapshot(F.doc(db,"publico","catalogo"),s=>cb(s.exists()?(s.data().itens||{}):{}),err); },
+      async lerFoto(id){ const s=await F.getDoc(F.doc(db,"publico","foto_"+id)); return s.exists()?(s.data().img||""):""; },
       verLoja(cb){ return F.onSnapshot(F.doc(db,"publico","loja"),s=>cb(s.exists()?s.data():{}),()=>{}); },
       async criarPedido(d){ const ref=F.doc(F.collection(db,"pedidos")); await F.setDoc(ref,Object.assign({},d,{criado:F.serverTimestamp()})); return ref.id; },
       verPedido(id,cb,err){ return F.onSnapshot(F.doc(db,"pedidos",id),s=>cb(s.exists()?s.data():null),err); }
@@ -259,17 +267,22 @@ const passoDe = p => PASSO[p.un]||1;
 function listaAtiva(){ return Object.keys(itens).map(id=>Object.assign({id},itens[id])).filter(p=>p&&p.nome&&p.ativo!==false&&p.preco>0); }
 function desenharProdutos(){
   const termo = $("busca").value.trim().toLowerCase();
-  const lista = listaAtiva().filter(p=>!termo||p.nome.toLowerCase().includes(termo)).sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR"));
+  const presentes = CATS.filter(c=>listaAtiva().some(p=>catDe(p)===c));
+  if(!presentes.includes(filtroCat)) filtroCat="Todos";
+  $("filtros").hidden = presentes.length<2;
+  $("filtros").innerHTML = ["Todos"].concat(presentes).map(c=>'<button type="button" data-cat="'+c+'" aria-pressed="'+(filtroCat===c)+'">'+c+'</button>').join("");
+  const lista = listaAtiva().filter(p=>(filtroCat==="Todos"||catDe(p)===filtroCat)&&(!termo||p.nome.toLowerCase().includes(termo))).sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR"));
   if(!carregouCat) return;
   if(!listaAtiva().length){ $("produtos").innerHTML='<p class="nota">Ainda não há produtos disponíveis. Volte daqui a pouco.</p>'; return; }
   if(!lista.length){ $("produtos").innerHTML='<p class="nota">Nenhum produto encontrado com esse nome.</p>'; return; }
   let html="";
   CATS.forEach(c => {
-    const g = lista.filter(p=>(CATS.includes(p.cat)?p.cat:"Outros")===c);
+    const g = lista.filter(p=>catDe(p)===c);
     if(!g.length) return;
     html += "<h3>"+c+"</h3>"+g.map(p => {
       const q = carrinho[p.id]||0;
-      return '<div class="prod'+(q?" tem":"")+'"><div class="inf"><div class="nome">'+esc(p.nome)+'</div><div class="preco"><b class="num">'+brl(p.preco)+'</b> / '+esc(p.un==="un"?"unidade":p.un||"kg")+'</div>'+(q?'<div class="sub num">'+brl(r2(q*p.preco))+'</div>':'')+'</div>'+
+      const img = p.foto ? fotoDe(p) : "";
+      return '<div class="prod'+(q?" tem":"")+'">'+(img?'<img class="foto" alt="" src="'+esc(img)+'">':'<div class="foto" data-fid="'+esc(p.id)+'" aria-hidden="true">'+esc(p.nome.trim().charAt(0).toUpperCase())+'</div>')+'<div class="inf"><div class="nome">'+esc(p.nome)+'</div><div class="preco"><b class="num">'+brl(p.preco)+'</b> / '+esc(p.un==="un"?"unidade":p.un||"kg")+'</div>'+(q?'<div class="sub num">'+brl(r2(q*p.preco))+'</div>':'')+'</div>'+
         '<div class="passo">'+(q?'<button type="button" data-menos="'+esc(p.id)+'" aria-label="Tirar '+esc(p.nome)+'">−</button><span class="num">'+qtd(q,p.un||"kg")+'</span>':'')+'<button type="button" class="mais" data-mais="'+esc(p.id)+'" aria-label="Adicionar '+esc(p.nome)+'">+</button></div></div>';
     }).join("");
   });
@@ -286,6 +299,20 @@ $("produtos").addEventListener("click", e => {
   desenharProdutos(); desenharResumo();
 });
 $("busca").addEventListener("input", desenharProdutos);
+$("filtros").addEventListener("click", e => { const b=e.target.closest("[data-cat]"); if(b){ filtroCat=b.dataset.cat; desenharProdutos(); } });
+/* Fotos: ficam em documentos separados; cada aparelho guarda a foto até o preço/foto mudar de versão. */
+let redesenho = 0;
+function fotoDe(p){
+  const f = fotos[p.id];
+  if(f && f.v===p.foto) return f.img;
+  const g = guarda.get("frutai_foto_"+p.id);
+  if(g && g.v===p.foto && g.img){ fotos[p.id]=g; return g.img; }
+  if(be && be.lerFoto && !(f && f.pedindo===p.foto)){
+    fotos[p.id] = {pedindo:p.foto};
+    be.lerFoto(p.id).then(img => { fotos[p.id]={v:p.foto,img:img||""}; if(img){ guarda.set("frutai_foto_"+p.id,fotos[p.id]); clearTimeout(redesenho); redesenho=setTimeout(desenharProdutos,150); } }).catch(()=>{ fotos[p.id]={v:p.foto,img:""}; });
+  }
+  return "";
+}
 
 /* ---------- resumo ---------- */
 function linhasCarrinho(){

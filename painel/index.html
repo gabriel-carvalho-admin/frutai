@@ -115,13 +115,17 @@ main{max-width:1120px;margin:0 auto;padding:16px 16px 48px;display:flex;flex-dir
 .msg{font-size:13px;font-weight:700;min-height:1.3em;color:var(--bom)}
 .msg.erro{color:var(--ruim)}
 .rolar{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:820px}
 th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2);text-align:left;padding:6px 6px;border-bottom:1px solid var(--linha);white-space:nowrap}
 td{padding:6px;border-bottom:1px solid var(--linha);vertical-align:top}
 td input,td select{border:1px solid var(--linha);background:var(--fundo);border-radius:8px;padding:8px 9px;width:100%;min-width:0}
 td input[type=checkbox]{width:20px;height:20px;accent-color:var(--verde);margin-top:8px}
 td small{display:block;font-size:11.5px;color:var(--texto2);margin-top:3px}
 .sug{display:flex;gap:6px;flex-wrap:wrap}
+.fotoCel{display:flex;align-items:center;gap:6px}
+.fotoCel img,.fotoCel .sem{width:48px;height:48px;border-radius:10px;object-fit:cover;background:var(--suave);flex:none;display:grid;place-items:center;font-size:11px;color:var(--texto2);font-weight:700}
+.fotoCel div{display:flex;flex-direction:column;gap:4px}
+.fotoCel label{cursor:pointer}
 .login{max-width:380px;margin:8vh auto 0;width:100%}
 @media (max-width:720px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.duo{grid-template-columns:1fr}}
 @keyframes pisca{50%{box-shadow:0 0 0 4px var(--manga)}}
@@ -188,17 +192,18 @@ td small{display:block;font-size:11.5px;color:var(--texto2);margin-top:3px}
   <section id="aba-produtos" hidden style="display:flex;flex-direction:column;gap:16px">
     <div class="cartao">
       <h2>Produtos do site e preços de venda</h2>
-      <p class="nota">Altere o preço, desmarque o que acabou e salve. O site dos clientes atualiza na hora.</p>
+      <p class="nota">Altere o preço, a categoria e a foto, desmarque o que acabou e salve. O site dos clientes atualiza na hora.</p>
       <div id="sugBox" hidden>
         <p class="nota" style="margin-bottom:6px;font-weight:700">Já precificados no financeiro e ainda fora do site (toque para adicionar):</p>
         <div class="sug" id="sug"></div>
       </div>
       <div class="rolar"><table>
-        <thead><tr><th style="width:30%">Produto</th><th>Categoria</th><th>Vendido por</th><th>Preço de venda (R$)</th><th>No site</th><th></th></tr></thead>
+        <thead><tr><th>Foto</th><th style="width:26%">Produto</th><th>Categoria</th><th>Vendido por</th><th>Preço de venda (R$)</th><th>No site</th><th></th></tr></thead>
         <tbody id="prodCorpo"></tbody>
       </table></div>
       <div class="barra">
         <button class="btn" id="prodNovo" type="button">Adicionar produto</button>
+        <button class="btn" id="prodSeparar" type="button">Separar frutas e verduras sozinho</button>
         <button class="btn pri" id="prodSalvar" type="button">Salvar produtos</button>
         <span class="msg" id="prodMsg" role="status"></span>
       </div>
@@ -234,7 +239,10 @@ td small{display:block;font-size:11.5px;color:var(--texto2);margin-top:3px}
 const $ = id => document.getElementById(id);
 const FB_V = "12.19.0";
 const FB_CFG = {apiKey:"AIzaSyDa64yQm3mlngb730eEmJNnRHk6xnbOGfY",authDomain:"frutai-c468e.firebaseapp.com",projectId:"frutai-c468e",storageBucket:"frutai-c468e.firebasestorage.app",messagingSenderId:"769992603459",appId:"1:769992603459:web:f0ec902404ce33eced61f6"};
-const CATS = ["Frutas","Verduras","Legumes","Outros"];
+const CATS = ["Frutas","Verduras","Outros"];
+const VERDURAS = "alface couve repolho cheiro coentro cebolinha salsa salsinha rucula agriao espinafre acelga brocolis tomate cebola batata cenoura beterraba beteraba pepino pimentao pimenta abobora jerimum abobrinha chuchu quiabo maxixe berinjela vagem alho mandioca macaxeira inhame milho feijao gengibre rabanete nabo jilo ervilha hortela manjericao".split(" ");
+const semAcento = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+const adivinhar = nome => { const n=semAcento(nome); return VERDURAS.some(v=>n.includes(v)) ? "Verduras" : "Frutas"; };
 const UNS = [["kg","kg"],["un","unidade"],["maço","maço"],["dúzia","dúzia"],["bandeja","bandeja"],["caixa","caixa"]];
 const ST = {novo:"Novo", separando:"Separando", saiu:"Em entrega", entregue:"Entregue", cancelado:"Cancelado"};
 const PROX = {novo:["separando","Começar a separar"], separando:["saiu","Pedido partiu para entrega"], saiu:["entregue","Marcar como entregue"]};
@@ -254,7 +262,7 @@ const campoValor = v => v ? (+v).toLocaleString("pt-BR",{minimumFractionDigits:2
 const pref = { get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
 
 let be=null, dia=tzDate(new Date()), pedidos=[], filtro="aberto", pararDia=null, primeira=true, vistos={}, chegou={};
-let cat={}, edit=[], sujo=false, precos={}, loja={}, ajustando=null;
+let cat={}, edit=[], sujo=false, precos={}, loja={}, ajustando=null, fotos={};
 
 /* ---------- backend ---------- */
 function backend(){
@@ -271,6 +279,9 @@ function backend(){
       atualizar(id,dados){ return F.updateDoc(F.doc(db,"pedidos",id),dados); },
       verCatalogo(cb,err){ return F.onSnapshot(F.doc(db,"publico","catalogo"),s=>cb(s.exists()?(s.data().itens||{}):{}),err); },
       salvarCatalogo(itens){ return F.setDoc(F.doc(db,"publico","catalogo"),{itens}); },
+      async lerFoto(id){ const s=await F.getDoc(F.doc(db,"publico","foto_"+id)); return s.exists()?(s.data().img||""):""; },
+      salvarFoto(id,img){ return F.setDoc(F.doc(db,"publico","foto_"+id),{img}); },
+      apagarFoto(id){ return F.deleteDoc(F.doc(db,"publico","foto_"+id)); },
       verLoja(cb,err){ return F.onSnapshot(F.doc(db,"publico","loja"),s=>cb(s.exists()?s.data():{}),err); },
       salvarLoja(d){ return F.setDoc(F.doc(db,"publico","loja"),d); },
       verPrecos(cb){ return F.onSnapshot(F.doc(db,"config","precos"),s=>cb(s.exists()?(s.data().itens||{}):{}),()=>{}); }
@@ -382,17 +393,18 @@ $("somAviso").addEventListener("click", ligarSom);
 document.addEventListener("click", function uma(){ ligarSom(); document.removeEventListener("click",uma); });
 
 /* ---------- produtos ---------- */
-function doCatalogo(){ edit = Object.keys(cat).map(id=>({id,nome:cat[id].nome||"",cat:CATS.includes(cat[id].cat)?cat[id].cat:"Outros",un:cat[id].un||"kg",preco:campoValor(cat[id].preco),ativo:cat[id].ativo!==false})).sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR")); sujo=false; }
+function doCatalogo(){ edit = Object.keys(cat).map(id=>({id,nome:cat[id].nome||"",cat:cat[id].cat==="Legumes"?"Verduras":CATS.includes(cat[id].cat)?cat[id].cat:"Outros",un:cat[id].un||"kg",preco:campoValor(cat[id].preco),ativo:cat[id].ativo!==false,foto:+cat[id].foto||0})).sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR")); sujo=false; }
 function calculado(nome){ const n=String(nome||"").trim().toLowerCase(); for(const k in precos){ const p=precos[k]; if(p&&p.produto&&p.produto.trim().toLowerCase()===n) return p; } return null; }
 function desenharProdutos(){
   $("prodCorpo").innerHTML = edit.length ? edit.map((p,i) => { const c=calculado(p.nome);
-    return '<tr><td><input data-i="'+i+'" data-c="nome" maxlength="40" value="'+esc(p.nome)+'" aria-label="Nome do produto"></td>'+
+    const img = p.foto ? fotoDe(p) : "";
+    return '<tr><td><div class="fotoCel">'+(img?'<img alt="" src="'+esc(img)+'">':'<span class="sem">'+(p.foto?"…":"sem")+'</span>')+'<div><label class="btn mini">'+(p.foto?"Trocar":"Foto")+'<input type="file" accept="image/*" hidden data-foto="'+i+'"></label>'+(p.foto?'<button class="btn mini perigo" type="button" data-semfoto="'+i+'">Tirar</button>':'')+'</div></div></td><td><input data-i="'+i+'" data-c="nome" maxlength="40" value="'+esc(p.nome)+'" aria-label="Nome do produto"></td>'+
       '<td><select data-i="'+i+'" data-c="cat" aria-label="Categoria">'+CATS.map(x=>'<option'+(x===p.cat?" selected":"")+'>'+x+'</option>').join("")+'</select></td>'+
       '<td><select data-i="'+i+'" data-c="un" aria-label="Vendido por">'+UNS.map(u=>'<option value="'+u[0]+'"'+(u[0]===p.un?" selected":"")+'>'+u[1]+'</option>').join("")+'</select></td>'+
       '<td><input data-i="'+i+'" data-c="preco" inputmode="decimal" value="'+esc(p.preco)+'" placeholder="0,00" aria-label="Preço de venda">'+(c?'<small>Calculado na precificação: '+brl(c.preco)+'/kg</small>':'')+'</td>'+
       '<td><input type="checkbox" data-i="'+i+'" data-c="ativo"'+(p.ativo?" checked":"")+' aria-label="Mostrar no site"></td>'+
       '<td><button class="btn mini perigo" type="button" data-tirar="'+i+'">Remover</button></td></tr>'; }).join("")
-    : '<tr><td colspan="6" class="vazio">Nenhum produto no site ainda. Adicione pela precificação ou pelo botão abaixo.</td></tr>';
+    : '<tr><td colspan="7" class="vazio">Nenhum produto no site ainda. Adicione pela precificação ou pelo botão abaixo.</td></tr>';
   const nomes = edit.map(p=>p.nome.trim().toLowerCase());
   const fora = Object.keys(precos).map(k=>precos[k]).filter(p=>p&&p.produto&&p.preco>0&&!nomes.includes(p.produto.trim().toLowerCase())).sort((a,b)=>a.produto.localeCompare(b.produto,"pt-BR"));
   $("sugBox").hidden = !fora.length;
@@ -400,7 +412,7 @@ function desenharProdutos(){
 }
 $("prodCorpo").addEventListener("input", e => { const el=e.target, i=+el.dataset.i; if(!edit[i]||!el.dataset.c) return; edit[i][el.dataset.c] = el.type==="checkbox" ? el.checked : el.value; sujo=true; $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; });
 $("prodCorpo").addEventListener("click", e => { const b=e.target.closest("[data-tirar]"); if(b){ edit.splice(+b.dataset.tirar,1); sujo=true; desenharProdutos(); $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; } });
-function novoProduto(nome,preco){ edit.push({id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),nome:nome||"",cat:"Frutas",un:"kg",preco:preco?campoValor(preco):"",ativo:true}); sujo=true; desenharProdutos(); $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; }
+function novoProduto(nome,preco){ edit.push({id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),nome:nome||"",cat:nome?adivinhar(nome):"Frutas",foto:0,un:"kg",preco:preco?campoValor(preco):"",ativo:true}); sujo=true; desenharProdutos(); $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; }
 $("prodNovo").addEventListener("click", () => { novoProduto(); const ins=$("prodCorpo").querySelectorAll('input[data-c="nome"]'); if(ins.length) ins[ins.length-1].focus(); });
 $("sug").addEventListener("click", e => { const b=e.target.closest("[data-sug]"); if(b){ const p=calculado(b.dataset.sug); novoProduto(b.dataset.sug, p?p.preco:0); } });
 $("prodSalvar").addEventListener("click", () => {
@@ -410,12 +422,46 @@ $("prodSalvar").addEventListener("click", () => {
     if(!nome){ m.textContent="Há um produto sem nome. Preencha ou remova a linha."; m.className="msg erro"; return; }
     if(nomes[k]){ m.textContent="O produto "+nome+" aparece duas vezes."; m.className="msg erro"; return; }
     if(isNaN(v)||v<=0){ m.textContent="Confira o preço de "+nome+". Use só números, como 4,99."; m.className="msg erro"; return; }
-    nomes[k]=1; itens[p.id]={nome,cat:p.cat,un:p.un,preco:v,ativo:!!p.ativo};
+    nomes[k]=1; itens[p.id]={nome,cat:p.cat,un:p.un,preco:v,ativo:!!p.ativo}; if(p.foto) itens[p.id].foto=p.foto;
   }
   m.textContent="Salvando…"; m.className="msg";
   be.salvarCatalogo(itens).then(()=>{ cat=itens; doCatalogo(); desenharProdutos(); m.textContent="Produtos salvos. O site já está atualizado."; m.className="msg"; })
     .catch(()=>{ m.textContent="Não foi possível salvar. Confira a internet e tente de novo."; m.className="msg erro"; });
 });
+
+const naoSalvo = () => { sujo=true; $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; };
+$("prodSeparar").addEventListener("click", () => { edit.forEach(p=>{ if(p.nome.trim()) p.cat=adivinhar(p.nome); }); desenharProdutos(); naoSalvo(); $("prodMsg").textContent="Categorias sugeridas pelo nome. Confira e clique em Salvar produtos."; });
+/* Fotos: reduzidas no aparelho para 320×320 e guardadas em um documento por produto. */
+let refoto = 0;
+function fotoDe(p){
+  const f = fotos[p.id];
+  if(f && f.v===p.foto) return f.img;
+  if(!(f && f.pedindo===p.foto)){
+    fotos[p.id]={pedindo:p.foto};
+    be.lerFoto(p.id).then(img=>{ fotos[p.id]={v:p.foto,img:img||""}; clearTimeout(refoto); refoto=setTimeout(desenharProdutos,150); }).catch(()=>{ fotos[p.id]={v:p.foto,img:""}; });
+  }
+  return "";
+}
+function reduzir(arquivo){
+  return new Promise((ok,falha) => {
+    const url=URL.createObjectURL(arquivo), im=new Image();
+    im.onload = () => { try{
+      const L=320, lado=Math.min(im.naturalWidth,im.naturalHeight), c=document.createElement("canvas"); c.width=L; c.height=L;
+      c.getContext("2d").drawImage(im,(im.naturalWidth-lado)/2,(im.naturalHeight-lado)/2,lado,lado,0,0,L,L);
+      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg",0.72));
+    }catch(e){ falha(e); } };
+    im.onerror = () => { URL.revokeObjectURL(url); falha(new Error("imagem")); };
+    im.src=url;
+  });
+}
+$("prodCorpo").addEventListener("change", e => {
+  const el=e.target; if(!el.dataset.foto) return;
+  const p=edit[+el.dataset.foto], arq=el.files&&el.files[0]; if(!p||!arq) return;
+  const m=$("prodMsg"); m.textContent="Preparando a foto…"; m.className="msg";
+  reduzir(arq).then(img => be.salvarFoto(p.id,img).then(()=>{ p.foto=Date.now(); fotos[p.id]={v:p.foto,img}; desenharProdutos(); naoSalvo(); m.textContent="Foto pronta. Clique em Salvar produtos para aparecer no site."; }))
+    .catch(()=>{ m.textContent="Não foi possível usar essa foto. Tente outra imagem (JPG ou PNG)."; m.className="msg erro"; });
+});
+$("prodCorpo").addEventListener("click", e => { const b=e.target.closest("[data-semfoto]"); if(!b) return; const p=edit[+b.dataset.semfoto]; if(!p) return; p.foto=0; be.apagarFoto(p.id).catch(()=>{}); desenharProdutos(); naoSalvo(); });
 
 /* ---------- loja ---------- */
 function preencherLoja(){ $("ljAberta").checked=loja.aberta!==false; $("ljTaxa").value=campoValor(loja.taxaEntrega); $("ljMin").value=campoValor(loja.minimo); $("ljWa").value=loja.whatsapp?fmtTel(loja.whatsapp):""; $("ljAviso").value=loja.aviso||""; }
