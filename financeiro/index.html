@@ -383,12 +383,15 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
   <section id="aba-precos" hidden>
     <div class="grade form">
       <div class="cartao">
-        <h2>Calcular preço por kg</h2>
+        <h2>Calcular preço de venda</h2>
         <form class="lanc" id="fPreco" novalidate>
-          <div class="campo"><label for="prProduto">Produto</label><input id="prProduto" maxlength="40" placeholder="Ex.: Tomate" autocomplete="off"></div>
+          <div class="duo">
+            <div class="campo"><label for="prProduto">Produto</label><input id="prProduto" maxlength="40" placeholder="Ex.: Tomate" autocomplete="off"></div>
+            <div class="campo"><label for="prUn">Vendido por</label><select id="prUn"><option value="kg">kg</option><option value="un">Unidade</option><option value="dúzia">Dúzia</option><option value="maço">Maço</option><option value="bandeja">Bandeja</option><option value="caixa">Caixa</option></select></div>
+          </div>
           <div class="duo">
             <div class="campo"><label for="prValor">Valor pago na compra (R$)</label><input id="prValor" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
-            <div class="campo"><label for="prKg">Quantidade (kg)</label><input id="prKg" inputmode="decimal" placeholder="0" autocomplete="off"></div>
+            <div class="campo"><label for="prKg" id="prKgRot">Quantidade (kg)</label><input id="prKg" inputmode="decimal" placeholder="0" autocomplete="off"></div>
           </div>
           <div class="duo">
             <div class="campo"><label for="prMargem">Margem (%)</label><input id="prMargem" inputmode="decimal" placeholder="0" autocomplete="off"></div>
@@ -397,13 +400,13 @@ tfoot td{font-weight:800;border-top:2px solid var(--linha);border-bottom:0}
           </div>
           <div class="campo"><label for="prQuebra">Perda esperada (%) · opcional</label><input id="prQuebra" inputmode="decimal" placeholder="0" autocomplete="off"></div>
           <div class="resultado">
-            <span class="rot">Preço de venda por kg</span>
+            <span class="rot" id="prPrecoRot">Preço de venda por kg</span>
             <span class="val num" id="prPreco">R$ 0,00</span>
             <span class="sub" id="prSub">Preencha valor, quantidade e margem.</span>
           </div>
           <div class="mini3">
-            <div><span>Custo por kg</span><b class="num" id="prCusto">R$ 0,00</b></div>
-            <div><span>Lucro por kg</span><b class="num" id="prLucro">R$ 0,00</b></div>
+            <div><span id="prCustoRot">Custo por kg</span><b class="num" id="prCusto">R$ 0,00</b></div>
+            <div><span id="prLucroRot">Lucro por kg</span><b class="num" id="prLucro">R$ 0,00</b></div>
             <div><span>Lucro no lote</span><b class="num" id="prLote">R$ 0,00</b></div>
           </div>
           <div class="acoes"><button class="btn pri" type="submit">Salvar na tabela de preços</button><button class="btn" type="button" id="prLimpar">Limpar</button></div>
@@ -1049,20 +1052,29 @@ function lerNum(txt){
   return (!isFinite(n)||n<0) ? NaN : n;
 }
 function num(v,casas){ return (v||0).toLocaleString("pt-BR",{maximumFractionDigits:casas==null?2:casas}); }
-function calcPreco(valor,kg,margem,base,quebra){
+/* Unidades de venda: rótulo, o que se digita na quantidade comprada, e quantas unidades compradas formam uma unidade de venda. */
+var UNV={kg:{rot:"kg",qtd:"Quantidade (kg)",curto:"kg",f:1}, un:{rot:"unidade",qtd:"Quantidade (unidades)",curto:"unidades",f:1}, "dúzia":{rot:"dúzia",qtd:"Quantidade (unidades)",curto:"unidades",f:12},
+  "maço":{rot:"maço",qtd:"Quantidade (maços)",curto:"maços",f:1}, bandeja:{rot:"bandeja",qtd:"Quantidade (bandejas)",curto:"bandejas",f:1}, caixa:{rot:"caixa",qtd:"Quantidade (caixas)",curto:"caixas",f:1}};
+function unv(u){ return UNV[u]||UNV.kg; }
+function rotulosUn(){
+  var u=unv($("prUn").value);
+  $("prKgRot").textContent=u.qtd; $("prPrecoRot").textContent="Preço de venda por "+u.rot; $("prCustoRot").textContent="Custo por "+u.rot; $("prLucroRot").textContent="Lucro por "+u.rot;
+}
+function calcPreco(valor,kg,margem,base,quebra,fator){
+  fator=fator||1;
   if(!(valor>0)||!(kg>0)||isNaN(margem)||isNaN(quebra)) return null;
   if(quebra>=100) return {erro:"A perda esperada precisa ser menor que 100%."};
   if(base==="venda" && margem>=100) return {erro:"Sobre o preço de venda, a margem precisa ser menor que 100%."};
-  var custoBruto=valor/kg, kgVenda=kg*(1-quebra/100), custo=valor/kgVenda;
+  var custoBruto=valor/kg*fator, kgVenda=kg*(1-quebra/100), custo=valor/kgVenda*fator;
   var preco = base==="venda" ? custo/(1-margem/100) : custo*(1+margem/100);
-  return {custoBruto:custoBruto, custo:custo, preco:preco, lucroKg:preco-custo, kgVenda:kgVenda, lucroLote:(preco-custo)*kgVenda};
+  return {custoBruto:custoBruto, custo:custo, preco:preco, lucroKg:preco-custo, kgVenda:kgVenda, lucroLote:(preco-custo)*kgVenda/fator, receita:preco*kgVenda/fator};
 }
 function lerPreco(){
   return {produto:$("prProduto").value.trim(), valor:lerNum($("prValor").value), kg:lerNum($("prKg").value),
-          margem:lerNum($("prMargem").value), base:$("prBase").value, quebra:lerNum($("prQuebra").value)};
+          margem:lerNum($("prMargem").value), base:$("prBase").value, quebra:lerNum($("prQuebra").value), un:UNV[$("prUn").value]?$("prUn").value:"kg"};
 }
 function atualizarPreco(){
-  var f=lerPreco(), r=calcPreco(f.valor,f.kg,f.margem,f.base,f.quebra);
+  var f=lerPreco(), u=unv(f.un), r=calcPreco(f.valor,f.kg,f.margem,f.base,f.quebra,u.f);
   if(!r||r.erro){
     $("prPreco").textContent=brl(0); $("prCusto").textContent=brl(0); $("prLucro").textContent=brl(0); $("prLote").textContent=brl(0);
     $("prSub").textContent = r&&r.erro ? r.erro : (isNaN(f.valor)||isNaN(f.kg)||isNaN(f.margem)||isNaN(f.quebra)) ? "Use só números, como 180,00." : "Preencha valor, quantidade e margem.";
@@ -1073,13 +1085,14 @@ function atualizarPreco(){
   $("prLucro").textContent=brl(r.lucroKg);
   $("prLote").textContent=brl(r.lucroLote);
   $("prSub").textContent = f.quebra>0
-    ? "Pagou "+brl(r.custoBruto)+" por kg; com "+num(f.quebra,1)+"% de perda sobram "+num(r.kgVenda,1)+" kg para vender."
-    : "Vendendo os "+num(f.kg,1)+" kg você recebe "+brl(r.preco*r.kgVenda)+".";
+    ? "Pagou "+brl(r.custoBruto)+" por "+u.rot+"; com "+num(f.quebra,1)+"% de perda sobram "+num(r.kgVenda,1)+" "+u.curto+" para vender."
+    : "Vendendo "+num(f.kg,1)+" "+u.curto+" você recebe "+brl(r.receita)+"."+(f.un==="dúzia"?" Cada unidade sai por "+brl(r.preco/12)+".":"");
   return r;
 }
 ["prValor","prKg","prMargem","prQuebra"].forEach(function(id){ $(id).addEventListener("input",atualizarPreco); });
+$("prUn").addEventListener("change",function(){ rotulosUn(); atualizarPreco(); });
 $("prBase").addEventListener("change",atualizarPreco);
-$("prLimpar").addEventListener("click",function(){ ["prProduto","prValor","prKg","prMargem","prQuebra"].forEach(function(id){ $(id).value=""; }); $("prBase").value="custo"; aviso("prMsg",""); atualizarPreco(); });
+$("prLimpar").addEventListener("click",function(){ ["prProduto","prValor","prKg","prMargem","prQuebra"].forEach(function(id){ $(id).value=""; }); $("prBase").value="custo"; $("prUn").value="kg"; rotulosUn(); aviso("prMsg",""); atualizarPreco(); });
 function chavePreco(nome){ return "p-"+nome.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40); }
 $("fPreco").addEventListener("submit",function(e){
   e.preventDefault();
@@ -1087,23 +1100,23 @@ $("fPreco").addEventListener("submit",function(e){
   if(!r){ aviso("prMsg","Preencha valor pago, quantidade e margem antes de salvar.",true); return; }
   if(!f.produto){ aviso("prMsg","Dê um nome ao produto para salvar na tabela.",true); $("prProduto").focus(); return; }
   var k=chavePreco(f.produto); if(k==="p-") k=novoId();
-  precos[k]={produto:f.produto,valor:f.valor,kg:f.kg,margem:f.margem,base:f.base,quebra:f.quebra,custo:Math.round(r.custo*100)/100,preco:Math.round(r.preco*100)/100,data:hoje()};
+  precos[k]={produto:f.produto,un:f.un,valor:f.valor,kg:f.kg,margem:f.margem,base:f.base,quebra:f.quebra,custo:Math.round(r.custo*100)/100,preco:Math.round(r.preco*100)/100,data:hoje()};
   gravarEm("config/precos"); desenharPrecos();
-  aviso("prMsg",f.produto+" salvo: "+brl(r.preco)+" por kg.");
+  aviso("prMsg",f.produto+" salvo: "+brl(r.preco)+" por "+unv(f.un).rot+".");
 });
 function desenharPrecos(){
   var ks=Object.keys(precos).filter(function(k){ return precos[k]&&precos[k].produto; }).sort(function(a,b){ return precos[a].produto.localeCompare(precos[b].produto,"pt-BR"); });
   if(!ks.length){ $("prLista").innerHTML='<div class="vazio">Nenhum produto salvo ainda. Calcule um preço e salve para montar a tabela.</div>'; return; }
-  $("prLista").innerHTML='<table><thead><tr><th>Produto</th><th class="r">Custo/kg</th><th class="r">Margem</th><th class="r">Preço/kg</th><th>Atualizado</th><th></th></tr></thead><tbody>'+
+  $("prLista").innerHTML='<table><thead><tr><th>Produto</th><th class="r">Custo</th><th class="r">Margem</th><th class="r">Preço de venda</th><th>Atualizado</th><th></th></tr></thead><tbody>'+
     ks.map(function(k){ var p=precos[k];
-      return '<tr><td><b>'+esc(p.produto)+'</b></td><td class="r num">'+brl(p.custo)+'</td><td class="r num">'+num(p.margem,1)+'%<br><span class="desc">'+(p.base==="venda"?"sobre a venda":"sobre o custo")+'</span></td><td class="r num"><b>'+brl(p.preco)+'</b></td><td class="num">'+(p.data?diaCurto(p.data).slice(0,5):"")+'</td><td class="ops"><button class="btn mini" data-usar="'+esc(k)+'">Recalcular</button> <button class="btn mini perigo" data-tirar="'+esc(k)+'">Excluir</button></td></tr>'; }).join("")+
+      return '<tr><td><b>'+esc(p.produto)+'</b><br><span class="desc">por '+unv(p.un).rot+'</span></td><td class="r num">'+brl(p.custo)+'</td><td class="r num">'+num(p.margem,1)+'%<br><span class="desc">'+(p.base==="venda"?"sobre a venda":"sobre o custo")+'</span></td><td class="r num"><b>'+brl(p.preco)+'</b></td><td class="num">'+(p.data?diaCurto(p.data).slice(0,5):"")+'</td><td class="ops"><button class="btn mini" data-usar="'+esc(k)+'">Recalcular</button> <button class="btn mini perigo" data-tirar="'+esc(k)+'">Excluir</button></td></tr>'; }).join("")+
     '</tbody></table>';
 }
 $("prLista").addEventListener("click",function(e){
   var u=e.target.closest("[data-usar]"), t=e.target.closest("[data-tirar]");
   if(u){
     var p=precos[u.dataset.usar]; if(!p) return;
-    $("prProduto").value=p.produto; $("prValor").value=campoValor(p.valor); $("prKg").value=num(p.kg,3).replace(/\./g,""); $("prMargem").value=num(p.margem,2); $("prQuebra").value=p.quebra?num(p.quebra,2):""; $("prBase").value=p.base||"custo";
+    $("prProduto").value=p.produto; $("prValor").value=campoValor(p.valor); $("prKg").value=num(p.kg,3).replace(/\./g,""); $("prMargem").value=num(p.margem,2); $("prQuebra").value=p.quebra?num(p.quebra,2):""; $("prBase").value=p.base||"custo"; $("prUn").value=UNV[p.un]?p.un:"kg"; rotulosUn();
     atualizarPreco(); aviso("prMsg","Ajuste os valores de "+p.produto+" e salve de novo."); $("prValor").focus();
   } else if(t){
     if(t.dataset.certeza){ delete precos[t.dataset.tirar]; gravarEm("config/precos"); desenharPrecos(); }

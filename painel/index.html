@@ -240,6 +240,7 @@ const $ = id => document.getElementById(id);
 const FB_V = "12.19.0";
 const FB_CFG = {apiKey:"AIzaSyDa64yQm3mlngb730eEmJNnRHk6xnbOGfY",authDomain:"frutai-c468e.firebaseapp.com",projectId:"frutai-c468e",storageBucket:"frutai-c468e.firebasestorage.app",messagingSenderId:"769992603459",appId:"1:769992603459:web:f0ec902404ce33eced61f6"};
 const CATS = ["Frutas","Verduras","Outros"];
+const rotUn = u => { const x=UNS.find(y=>y[0]===u); return x?x[1]:"kg"; };
 const VERDURAS = "alface couve repolho cheiro coentro cebolinha salsa salsinha rucula agriao espinafre acelga brocolis tomate cebola batata cenoura beterraba beteraba pepino pimentao pimenta abobora jerimum abobrinha chuchu quiabo maxixe berinjela vagem alho mandioca macaxeira inhame milho feijao gengibre rabanete nabo jilo ervilha hortela manjericao".split(" ");
 const semAcento = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 const adivinhar = nome => { const n=semAcento(nome); return VERDURAS.some(v=>n.includes(v)) ? "Verduras" : "Frutas"; };
@@ -401,20 +402,20 @@ function desenharProdutos(){
     return '<tr><td><div class="fotoCel">'+(img?'<img alt="" src="'+esc(img)+'">':'<span class="sem">'+(p.foto?"…":"sem")+'</span>')+'<div><label class="btn mini">'+(p.foto?"Trocar":"Foto")+'<input type="file" accept="image/*" hidden data-foto="'+i+'"></label>'+(p.foto?'<button class="btn mini perigo" type="button" data-semfoto="'+i+'">Tirar</button>':'')+'</div></div></td><td><input data-i="'+i+'" data-c="nome" maxlength="40" value="'+esc(p.nome)+'" aria-label="Nome do produto"></td>'+
       '<td><select data-i="'+i+'" data-c="cat" aria-label="Categoria">'+CATS.map(x=>'<option'+(x===p.cat?" selected":"")+'>'+x+'</option>').join("")+'</select></td>'+
       '<td><select data-i="'+i+'" data-c="un" aria-label="Vendido por">'+UNS.map(u=>'<option value="'+u[0]+'"'+(u[0]===p.un?" selected":"")+'>'+u[1]+'</option>').join("")+'</select></td>'+
-      '<td><input data-i="'+i+'" data-c="preco" inputmode="decimal" value="'+esc(p.preco)+'" placeholder="0,00" aria-label="Preço de venda">'+(c?'<small>Calculado na precificação: '+brl(c.preco)+'/kg</small>':'')+'</td>'+
+      '<td><input data-i="'+i+'" data-c="preco" inputmode="decimal" value="'+esc(p.preco)+'" placeholder="0,00" aria-label="Preço de venda">'+(c?'<small>Calculado na precificação: '+brl(c.preco)+' por '+rotUn(c.un)+'</small>':'')+'</td>'+
       '<td><input type="checkbox" data-i="'+i+'" data-c="ativo"'+(p.ativo?" checked":"")+' aria-label="Mostrar no site"></td>'+
       '<td><button class="btn mini perigo" type="button" data-tirar="'+i+'">Remover</button></td></tr>'; }).join("")
     : '<tr><td colspan="7" class="vazio">Nenhum produto no site ainda. Adicione pela precificação ou pelo botão abaixo.</td></tr>';
   const nomes = edit.map(p=>p.nome.trim().toLowerCase());
   const fora = Object.keys(precos).map(k=>precos[k]).filter(p=>p&&p.produto&&p.preco>0&&!nomes.includes(p.produto.trim().toLowerCase())).sort((a,b)=>a.produto.localeCompare(b.produto,"pt-BR"));
   $("sugBox").hidden = !fora.length;
-  $("sug").innerHTML = fora.map(p=>'<button class="btn mini" type="button" data-sug="'+esc(p.produto)+'">+ '+esc(p.produto)+' · '+brl(p.preco)+'/kg</button>').join("");
+  $("sug").innerHTML = fora.map(p=>'<button class="btn mini" type="button" data-sug="'+esc(p.produto)+'">+ '+esc(p.produto)+' · '+brl(p.preco)+' por '+rotUn(p.un)+'</button>').join("");
 }
 $("prodCorpo").addEventListener("input", e => { const el=e.target, i=+el.dataset.i; if(!edit[i]||!el.dataset.c) return; edit[i][el.dataset.c] = el.type==="checkbox" ? el.checked : el.value; sujo=true; $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; });
 $("prodCorpo").addEventListener("click", e => { const b=e.target.closest("[data-tirar]"); if(b){ edit.splice(+b.dataset.tirar,1); sujo=true; desenharProdutos(); $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; } });
-function novoProduto(nome,preco){ edit.push({id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),nome:nome||"",cat:nome?adivinhar(nome):"Frutas",foto:0,un:"kg",preco:preco?campoValor(preco):"",ativo:true}); sujo=true; desenharProdutos(); $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; }
+function novoProduto(nome,preco,un){ edit.push({id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),nome:nome||"",cat:nome?adivinhar(nome):"Frutas",foto:0,un:UNS.some(x=>x[0]===un)?un:"kg",preco:preco?campoValor(preco):"",ativo:true}); sujo=true; desenharProdutos(); $("prodMsg").textContent="Alterações ainda não salvas."; $("prodMsg").className="msg erro"; }
 $("prodNovo").addEventListener("click", () => { novoProduto(); const ins=$("prodCorpo").querySelectorAll('input[data-c="nome"]'); if(ins.length) ins[ins.length-1].focus(); });
-$("sug").addEventListener("click", e => { const b=e.target.closest("[data-sug]"); if(b){ const p=calculado(b.dataset.sug); novoProduto(b.dataset.sug, p?p.preco:0); } });
+$("sug").addEventListener("click", e => { const b=e.target.closest("[data-sug]"); if(b){ const p=calculado(b.dataset.sug); novoProduto(b.dataset.sug, p?p.preco:0, p?p.un:"kg"); } });
 $("prodSalvar").addEventListener("click", () => {
   const m=$("prodMsg"), itens={}, nomes={};
   for(const p of edit){
