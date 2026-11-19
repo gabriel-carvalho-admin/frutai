@@ -216,7 +216,7 @@ footer a{color:inherit}
   </div>
 </div>
 
-<footer><span>Frutaí · Ceasa Teresina</span><a href="painel/">Área da equipe</a><span id="credito" hidden>Fotos de produtos: <a href="https://github.com/fruits-360" target="_blank" rel="noopener">Fruits-360</a>, Mihai Oltean, <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.pt_BR" target="_blank" rel="noopener">CC BY-SA 4.0</a> (recortadas)</span></footer>
+<footer><span>Frutaí · Ceasa Teresina</span><a href="painel/">Área da equipe</a><span id="credito" hidden>Fotos de produtos: <a href="https://unsplash.com/pt-br" target="_blank" rel="noopener">Unsplash</a></span></footer>
 
 <script>
 (() => {
@@ -225,6 +225,8 @@ const $ = id => document.getElementById(id);
 const FB_V = "12.19.0";
 const FB_CFG = {apiKey:"AIzaSyDa64yQm3mlngb730eEmJNnRHk6xnbOGfY",authDomain:"frutai-c468e.firebaseapp.com",projectId:"frutai-c468e",storageBucket:"frutai-c468e.firebasestorage.app",messagingSenderId:"769992603459",appId:"1:769992603459:web:f0ec902404ce33eced61f6"};
 const CATS = ["Frutas","Verduras","Outros"];
+const GAL = {"abacate":"1612506266679-606568a33215","abacaxi":"1550828520-4cb496926fc9","abobora":"1760905066148-2f04b5c6c087","abobrinha":"1692956475726-d4a90d0dfbdf","alface":"1622206151226-18ca2c9ab4a1","alho":"1540148426945-6cf22a6b2383","ameixa":"1564750497011-ead0ce4b9448","banana":"1603833665858-e61d17a86224","batata":"1518977676601-b53f82aba655","batata-doce":"1730815048561-45df6f7f331d","berinjela":"1605197378540-10ebaf6999e5","beterraba":"1758151748972-6840ed51058a","brocolis":"1770351927282-41f6c54f1ac6","caqui":"1604872831875-26cba17467a8","carambola":"1605879883262-0cd26b362f54","cebola":"1580201092675-a0a6a6cafbb1","cebola-roxa":"1782546079922-dc780b7e1efd","cebolinha":"1602769515559-e15133a7e992","cenoura":"1633380110125-f6e685676160","champignon":"1552825897-bb5efa86eab1","cheiro-verde":"1590759485418-90509afec818","chuchu":"1757332914630-12ea5bb701c0","coco":"1588413335653-34b770bca7c1","coentro":"1588879460618-9249e7d947d1","couve":"1524179091875-bf99a9a6af57","couve-flor":"1784043437088-c86a43eb695d","espinafre":"1576045057995-568f588f82fb","figo":"1635341814161-d696d538542c","gengibre":"1758055660285-d32b7b3b1e77","goiaba":"1693399991519-bef70bed19a2","kiwi":"1650261062904-b51482026eac","laranja":"1611080626919-7cf5a9dbab5b","lichia":"1705335834319-92a152363ea1","limao":"1785626381359-2a56d75d21ba","limao-siciliano":"1783083531142-519200c78e13","maca":"1560806887-1e4cd0b6cbd6","maca-verde":"1522507806580-0be3530796be","macaxeira":"1757283961570-682154747d9c","mamao":"1526318472351-c75fcf070305","manga":"1601493700631-2b16ec4b4716","maracuja":"1616077498072-ccba9b178fa5","melancia":"1767747484833-8e9d4f88fe69","melao":"1563288525-8f1ee0f874a8","mexerica":"1770678817492-5c9c3dad63a2","milho":"1649251037566-6881b4956615","morango":"1759686762997-64cd99f76846","ovos":"1639194335563-d56b83f0060c","pepino":"1568584711271-6c929fb49b60","pera":"1788512337872-7390113a5318","pessego":"1639588473831-dd9d014646ae","pimentao":"1758221056967-52731a2dc935","pimentao-vermelho":"1608737637507-9aaeb9f4bf30","pimentao-amarelo":"1730433267235-ed682d9346f9","pitaya":"1783749895106-d24048e34d47","quiabo":"1558408525-1092038389ae","repolho":"1611105637889-3afd7295bdbf","repolho-roxo":"1713780175318-85b968df4fda","roma":"1574709755254-fcd942d09d5a","rucula":"1603496987335-2cb9e257215d","tomate":"1767978529638-ff1faefa00c5","tomate-cereja":"1779013135610-1dc243a256ab","uva":"1631299106224-aae61c217164","uva-verde":"1632576883732-f131be0be48a","vagem":"1574963835594-61eede2070dc","manga-rosa":"1601493700631-2b16ec4b4716"};
+const galUrl = f => GAL[f] ? "https://images.unsplash.com/photo-"+GAL[f]+"?w=240&h=240&fit=crop&crop=entropy&auto=format&q=70" : "";
 const catDe = p => p.cat==="Legumes" ? "Verduras" : CATS.includes(p.cat) ? p.cat : "Outros";
 const PASSO = {kg:0.5};
 const ETAPAS = [
@@ -281,13 +283,13 @@ function desenharProdutos(){
     if(!g.length) return;
     html += "<h3>"+c+"</h3>"+g.map(p => {
       const q = carrinho[p.id]||0;
-      const img = p.foto ? fotoDe(p) : (/^[a-z0-9-]+$/.test(p.img||"") ? "fotos/"+p.img+".jpg" : "");
+      const img = p.foto ? fotoDe(p) : galUrl(p.img);
       return '<div class="prod'+(q?" tem":"")+'">'+(img?'<img class="foto" alt="" loading="lazy" src="'+esc(img)+'">':'<div class="foto" data-fid="'+esc(p.id)+'" aria-hidden="true">'+esc(p.nome.trim().charAt(0).toUpperCase())+'</div>')+'<div class="inf"><div class="nome">'+esc(p.nome)+'</div><div class="preco"><b class="num">'+brl(p.preco)+'</b> / '+esc(p.un==="un"?"unidade":p.un||"kg")+'</div>'+(q?'<div class="sub num">'+brl(r2(q*p.preco))+'</div>':'')+'</div>'+
         '<div class="passo">'+(q?'<button type="button" data-menos="'+esc(p.id)+'" aria-label="Tirar '+esc(p.nome)+'">−</button><span class="num">'+qtd(q,p.un||"kg")+'</span>':'')+'<button type="button" class="mais" data-mais="'+esc(p.id)+'" aria-label="Adicionar '+esc(p.nome)+'">+</button></div></div>';
     }).join("");
   });
   $("produtos").innerHTML = html;
-  $("credito").hidden = !listaAtiva().some(p=>!p.foto&&p.img);
+  $("credito").hidden = !listaAtiva().some(p=>!p.foto&&galUrl(p.img));
 }
 $("produtos").addEventListener("click", e => {
   const m = e.target.closest("[data-mais]"), n = e.target.closest("[data-menos]");
