@@ -216,7 +216,7 @@ footer a{color:inherit}
   </div>
 </div>
 
-<footer><span>Frutaí · Ceasa Teresina</span><a href="painel/">Área da equipe</a></footer>
+<footer><span>Frutaí · Ceasa Teresina</span><a href="painel/">Área da equipe</a><span id="credito" hidden>Fotos de produtos: <a href="https://github.com/fruits-360" target="_blank" rel="noopener">Fruits-360</a>, Mihai Oltean, <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.pt_BR" target="_blank" rel="noopener">CC BY-SA 4.0</a> (recortadas)</span></footer>
 
 <script>
 (() => {
@@ -281,12 +281,13 @@ function desenharProdutos(){
     if(!g.length) return;
     html += "<h3>"+c+"</h3>"+g.map(p => {
       const q = carrinho[p.id]||0;
-      const img = p.foto ? fotoDe(p) : "";
-      return '<div class="prod'+(q?" tem":"")+'">'+(img?'<img class="foto" alt="" src="'+esc(img)+'">':'<div class="foto" data-fid="'+esc(p.id)+'" aria-hidden="true">'+esc(p.nome.trim().charAt(0).toUpperCase())+'</div>')+'<div class="inf"><div class="nome">'+esc(p.nome)+'</div><div class="preco"><b class="num">'+brl(p.preco)+'</b> / '+esc(p.un==="un"?"unidade":p.un||"kg")+'</div>'+(q?'<div class="sub num">'+brl(r2(q*p.preco))+'</div>':'')+'</div>'+
+      const img = p.foto ? fotoDe(p) : (/^[a-z0-9-]+$/.test(p.img||"") ? "fotos/"+p.img+".jpg" : "");
+      return '<div class="prod'+(q?" tem":"")+'">'+(img?'<img class="foto" alt="" loading="lazy" src="'+esc(img)+'">':'<div class="foto" data-fid="'+esc(p.id)+'" aria-hidden="true">'+esc(p.nome.trim().charAt(0).toUpperCase())+'</div>')+'<div class="inf"><div class="nome">'+esc(p.nome)+'</div><div class="preco"><b class="num">'+brl(p.preco)+'</b> / '+esc(p.un==="un"?"unidade":p.un||"kg")+'</div>'+(q?'<div class="sub num">'+brl(r2(q*p.preco))+'</div>':'')+'</div>'+
         '<div class="passo">'+(q?'<button type="button" data-menos="'+esc(p.id)+'" aria-label="Tirar '+esc(p.nome)+'">−</button><span class="num">'+qtd(q,p.un||"kg")+'</span>':'')+'<button type="button" class="mais" data-mais="'+esc(p.id)+'" aria-label="Adicionar '+esc(p.nome)+'">+</button></div></div>';
     }).join("");
   });
   $("produtos").innerHTML = html;
+  $("credito").hidden = !listaAtiva().some(p=>!p.foto&&p.img);
 }
 $("produtos").addEventListener("click", e => {
   const m = e.target.closest("[data-mais]"), n = e.target.closest("[data-menos]");
